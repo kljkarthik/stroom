@@ -11,6 +11,7 @@
     "build:server": "tsc -p tsconfig.server.json",
     "build": "npm run build:client && npm run build:server",
     "start": "node dist/server/index.js",
+    "db:backup": "tsx scripts/backup-db.ts",
     "test": "tsx tests/run-all-tests.ts"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "lucide-react": "^1.16.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "recharts": "^3.10.1",
     "tailwind-merge": "^2.6.0",
     "zod": "^3.24.2"
   },

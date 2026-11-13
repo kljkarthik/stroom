@@ -6,27 +6,73 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const path_1 = __importDefault(require("path"));
+const env_1 = require("./config/env");
 const database_1 = require("./db/database");
+const security_1 = require("./middleware/security");
 const auth_1 = __importDefault(require("./routes/auth"));
 const onboarding_1 = __importDefault(require("./routes/onboarding"));
 const discovery_1 = __importDefault(require("./routes/discovery"));
 const preferences_1 = __importDefault(require("./routes/preferences"));
 const admin_1 = __importDefault(require("./routes/admin"));
+const events_1 = __importDefault(require("./routes/events"));
+const auction_1 = __importDefault(require("./routes/auction"));
+const passes_1 = __importDefault(require("./routes/passes"));
+const partners_1 = __importDefault(require("./routes/partners"));
+const communities_1 = __importDefault(require("./routes/communities"));
+const contact_1 = __importDefault(require("./routes/contact"));
+(0, env_1.validateEnvironment)();
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 5000;
-// Middleware
-app.use((0, cors_1.default)());
-app.use(express_1.default.json());
+const PORT = env_1.config.port;
+// Security hardening headers & Express fingerprinting removal
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.use(security_1.securityHeaders);
+// Origin-aware CORS policy
+app.use((0, cors_1.default)({
+    origin: (origin, callback) => {
+        if (!origin)
+            return callback(null, true); // Server-to-server, curl, native webviews
+        if (!env_1.config.isProduction)
+            return callback(null, true);
+        if (env_1.config.allowedOrigins.length > 0 && env_1.config.allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS policy'));
+    },
+    credentials: true,
+}));
+app.use(express_1.default.json({ limit: '2mb' }));
 // Initialize SQLite database and seed initial data
 (0, database_1.initDatabase)();
-// Health Check
+// Health Check (verifies live SQLite connectivity & operational status)
 app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        app: 'Stroom Social Discovery API',
-        version: '1.0.0',
-        timestamp: new Date().toISOString(),
-    });
+    try {
+        const dbCheck = database_1.db.prepare('SELECT 1 as ok').get();
+        if (!dbCheck || dbCheck.ok !== 1) {
+            return res.status(503).json({ status: 'degraded', database: 'unreachable', timestamp: new Date().toISOString() });
+        }
+        return res.json({
+            status: 'ok',
+            app: 'STROOM Auction Hub & Social Discovery API',
+            version: '2.0.0',
+            environment: env_1.config.nodeEnv,
+            database: 'connected',
+            integrations: {
+                paymentGatewayConfigured: Boolean(process.env.RAZORPAY_KEY_ID || process.env.STRIPE_SECRET_KEY),
+                emailProviderConfigured: Boolean(process.env.SMTP_HOST || process.env.RESEND_API_KEY),
+                mediaStorage: 'external_url_references',
+            },
+            uptimeSeconds: Math.round(process.uptime()),
+            timestamp: new Date().toISOString(),
+        });
+    }
+    catch (err) {
+        return res.status(503).json({
+            status: 'error',
+            database: 'failed',
+            timestamp: new Date().toISOString(),
+        });
+    }
 });
 // API Routes
 app.use('/api/auth', auth_1.default);
@@ -34,6 +80,12 @@ app.use('/api/onboarding', onboarding_1.default);
 app.use('/api/discovery', discovery_1.default);
 app.use('/api/users', preferences_1.default);
 app.use('/api/admin', admin_1.default);
+app.use('/api/events', events_1.default);
+app.use('/api/auctions', auction_1.default);
+app.use('/api/passes', passes_1.default);
+app.use('/api/partners', partners_1.default);
+app.use('/api/communities', communities_1.default);
+app.use('/api/contact', contact_1.default);
 // Serve static frontend in production
 const clientDistPath = path_1.default.resolve(process.cwd(), 'dist');
 app.use(express_1.default.static(clientDistPath));
@@ -48,9 +100,10 @@ app.get('*', (req, res, next) => {
         }
     });
 });
+app.use(security_1.globalErrorHandler);
 if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, () => {
-        console.log(`[Stroom Server] Running on http://localhost:${PORT}`);
+    app.listen(Number(PORT), '0.0.0.0', () => {
+        console.log(`[STROOM Server] Running on http://localhost:${PORT}`);
     });
 }
 exports.default = app;

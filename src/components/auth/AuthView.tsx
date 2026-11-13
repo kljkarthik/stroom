@@ -1,8 +1,25 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { Sparkles, Shield, User, ArrowRight, Lock, Mail, AlertCircle } from 'lucide-react';
+import { useAuth, isDemoAuthEnabled } from '../../context/AuthContext';
+import { StroomLogo } from '../common/StroomLogo';
+import {
+  Sparkles,
+  Shield,
+  User,
+  ArrowRight,
+  Lock,
+  Mail,
+  AlertCircle,
+  Building2,
+  Trophy,
+  ArrowLeft
+} from 'lucide-react';
 
-export const AuthView: React.FC = () => {
+interface AuthViewProps {
+  onBackToHome?: () => void;
+  intendedDestination?: string | null;
+}
+
+export const AuthView: React.FC<AuthViewProps> = ({ onBackToHome, intendedDestination }) => {
   const { login, register, loginAsDemoUser } = useAuth();
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [email, setEmail] = useState<string>('');
@@ -35,82 +52,116 @@ export const AuthView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-stroom-ivory relative overflow-hidden">
       {/* Ambient background glows */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-stroom-orange/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-stroom-deep/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="max-w-md w-full relative z-10 animate-fade-in text-left">
+      {onBackToHome && (
+        <button
+          onClick={onBackToHome}
+          className="absolute top-6 left-6 px-3.5 py-2 rounded-xl bg-white border border-stroom-borderLight text-xs font-bold text-stroom-charcoal hover:text-stroom-black flex items-center gap-1.5 shadow-sm transition-colors z-20"
+        >
+          <ArrowLeft className="w-4 h-4 text-stroom-orange" />
+          <span>Back to STROOM Home</span>
+        </button>
+      )}
+
+      <div className="max-w-md w-full relative z-10 animate-fade-in text-left my-8">
         {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-3xl vibe-gradient-bg flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-indigo-500/25">
-            <Sparkles className="w-8 h-8 fill-white" />
+        <div className="text-center mb-6">
+          <StroomLogo variant="dark" size="lg" showSubtitle={true} showTagline={true} />
+          <p className="text-xs text-stroom-charcoal/80 mt-2 font-medium">
+            Meet New People. Discover Common Interests. Build Real Connections.
+          </p>
+          {intendedDestination === 'partner' && (
+            <div className="mt-3 px-4 py-2 rounded-xl bg-stroom-cream border border-stroom-orange/40 text-stroom-deep text-xs font-bold inline-flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-stroom-orange" />
+              <span>Sign in to continue to the STROOM Partner Portal</span>
+            </div>
+          )}
+        </div>
+
+        {/* Demo Fast-Login Cards (strictly gated for dev/demo environments) */}
+        {isDemoAuthEnabled && (
+          <div className="mb-6 space-y-2.5">
+            <p className="text-[10px] font-black text-stroom-charcoal/60 uppercase tracking-widest text-center">
+              One-Click Instant Testing Access
+            </p>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => loginAsDemoUser('user')}
+                className="p-2.5 rounded-2xl bg-white hover:bg-stroom-cream/60 border border-stroom-orange/30 text-left transition-all hover:scale-[1.02] shadow-sm group"
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className="w-6 h-6 rounded-lg bg-stroom-cream flex items-center justify-center text-stroom-deep group-hover:bg-stroom-orange group-hover:text-white transition-colors shrink-0">
+                    <User className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-[11px] font-extrabold text-stroom-black truncate">Participant</span>
+                </div>
+                <p className="text-[10px] text-stroom-charcoal/70 leading-tight">
+                  Member & Bidder
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => loginAsDemoUser('partner')}
+                className="p-2.5 rounded-2xl bg-white hover:bg-stroom-cream/60 border border-stroom-orange/30 text-left transition-all hover:scale-[1.02] shadow-sm group"
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className="w-6 h-6 rounded-lg bg-stroom-cream flex items-center justify-center text-stroom-deep group-hover:bg-stroom-orange group-hover:text-white transition-colors shrink-0">
+                    <Building2 className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-[11px] font-extrabold text-stroom-black truncate">Partner</span>
+                </div>
+                <p className="text-[10px] text-stroom-charcoal/70 leading-tight">
+                  Venue & Café Host
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => loginAsDemoUser('admin')}
+                className="p-2.5 rounded-2xl bg-white hover:bg-stroom-cream/60 border border-stroom-orange/30 text-left transition-all hover:scale-[1.02] shadow-sm group"
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className="w-6 h-6 rounded-lg bg-stroom-cream flex items-center justify-center text-stroom-deep group-hover:bg-stroom-orange group-hover:text-white transition-colors shrink-0">
+                    <Shield className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-[11px] font-extrabold text-stroom-black truncate">Admin</span>
+                </div>
+                <p className="text-[10px] text-stroom-charcoal/70 leading-tight">
+                  Operations & CMS
+                </p>
+              </button>
+            </div>
           </div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">stroom</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Discover communities, meet like-minded people, find your vibe.
-          </p>
-        </div>
-
-        {/* Demo Fast-Login Cards */}
-        <div className="mb-6 space-y-2.5">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center">
-            One-Click Instant Testing Access
-          </p>
-
-          <button
-            type="button"
-            onClick={() => loginAsDemoUser('newUser')}
-            className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-indigo-950/70 to-slate-900 border border-indigo-500/40 hover:border-indigo-500 text-left transition-all active:scale-[0.98] flex items-center justify-between group shadow-lg"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
-                <User className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors">
-                  Login as Sam Taylor (New User)
-                </p>
-                <p className="text-[11px] text-slate-400">Triggers Post-Login Vibe Quiz Flow</p>
-              </div>
-            </div>
-            <ArrowRight className="w-4 h-4 text-indigo-400 group-hover:translate-x-1 transition-transform" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => loginAsDemoUser('admin')}
-            className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/50 to-slate-900 border border-amber-500/40 hover:border-amber-500 text-left transition-all active:scale-[0.98] flex items-center justify-between group shadow-lg"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
-                <Shield className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
-                  Login as Alex Rivera (Administrator)
-                </p>
-                <p className="text-[11px] text-slate-400">Opens Quiz CMS & Question Editor</p>
-              </div>
-            </div>
-            <ArrowRight className="w-4 h-4 text-amber-400 group-hover:translate-x-1 transition-transform" />
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3 my-6">
-          <div className="h-px bg-slate-800 flex-1" />
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            Or sign in with email
-          </span>
-          <div className="h-px bg-slate-800 flex-1" />
-        </div>
+        )}
 
         {/* Auth Form Card */}
-        <div className="p-6 rounded-3xl bg-slate-900/80 border border-white/10 shadow-2xl backdrop-blur-md">
+        <div className="p-6 sm:p-8 rounded-3xl bg-white border border-stroom-borderLight shadow-brand">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-black text-stroom-black font-display">
+              {isRegistering ? 'Join STROOM' : 'Sign In to STROOM'}
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setErrorMessage(null);
+              }}
+              className="text-xs font-bold text-stroom-orange hover:text-stroom-deep transition-colors"
+            >
+              {isRegistering ? 'Have an account? Sign In' : 'Need an account? Register'}
+            </button>
+          </div>
+
           {errorMessage && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 animate-shake">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
@@ -118,47 +169,53 @@ export const AuthView: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegistering && (
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Full Name</label>
+                <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                  Full Name
+                </label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <User className="w-4 h-4 text-stroom-orange absolute left-3 top-3.5" />
                   <input
                     type="text"
                     required
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Jordan Lee"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                    placeholder="e.g. Maya Krishnan"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight focus:border-stroom-orange focus:ring-2 focus:ring-stroom-orange/20 text-sm font-semibold text-stroom-black outline-none transition-all"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email Address</label>
+              <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                Email Address
+              </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Mail className="w-4 h-4 text-stroom-orange absolute left-3 top-3.5" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                  placeholder="you@domain.com"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight focus:border-stroom-orange focus:ring-2 focus:ring-stroom-orange/20 text-sm font-semibold text-stroom-black outline-none transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Password</label>
+              <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                Password
+              </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Lock className="w-4 h-4 text-stroom-orange absolute left-3 top-3.5" />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight focus:border-stroom-orange focus:ring-2 focus:ring-stroom-orange/20 text-sm font-semibold text-stroom-black outline-none transition-all"
                 />
               </div>
             </div>
@@ -166,39 +223,18 @@ export const AuthView: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 rounded-xl vibe-gradient-bg text-white font-bold text-xs shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-extrabold text-sm shadow-brand hover:brightness-105 active:scale-[0.99] disabled:opacity-50 transition-all flex items-center justify-center gap-2 mt-2"
             >
-              {isLoading ? (
-                <span>Authenticating...</span>
-              ) : isRegistering ? (
-                <>
-                  <span>Create Account & Start Vibe Quiz</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              ) : (
-                <>
-                  <span>Sign In</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
+              <span>{isLoading ? 'Processing...' : isRegistering ? 'Create STROOM Account' : 'Sign In'}</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </form>
-
-          <div className="mt-4 pt-4 border-t border-slate-800 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegistering(!isRegistering);
-                setErrorMessage(null);
-              }}
-              className="text-xs text-slate-400 hover:text-indigo-400 transition-colors"
-            >
-              {isRegistering
-                ? 'Already have an account? Sign in here'
-                : "Don't have an account? Sign up for Stroom"}
-            </button>
-          </div>
         </div>
+
+        {/* Footer info */}
+        <p className="text-[11px] text-stroom-charcoal/60 text-center mt-6">
+          "Strangers Today. Stories Tomorrow." • STROOM Community Platform
+        </p>
       </div>
     </div>
   );

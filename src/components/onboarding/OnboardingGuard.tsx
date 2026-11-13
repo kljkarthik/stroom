@@ -109,32 +109,38 @@ export const OnboardingGuard: React.FC<OnboardingGuardProps> = ({
   // Render Onboarding Views
   if (step === 'welcome') {
     return (
-      <WelcomeScreen
-        onStart={handleStartFromWelcome}
-        onSkip={handleSkip}
-        isLoading={isLoading}
-      />
+      <div className="min-h-screen bg-stroom-ivory text-stroom-black py-4">
+        <WelcomeScreen
+          onStart={handleStartFromWelcome}
+          onSkip={handleSkip}
+          isLoading={isLoading}
+        />
+      </div>
     );
   }
 
   if (step === 'quiz' && quizData && session) {
     return (
-      <QuizContainer
-        session={session}
-        quizData={quizData}
-        initialResponses={responses}
-        onComplete={handleComplete}
-        onSkip={handleSkip}
-      />
+      <div className="min-h-screen bg-stroom-ivory text-stroom-black py-4">
+        <QuizContainer
+          session={session}
+          quizData={quizData}
+          initialResponses={responses}
+          onComplete={handleComplete}
+          onSkip={handleSkip}
+        />
+      </div>
     );
   }
 
   if (step === 'completion') {
     return (
-      <QuizCompletionScreen
-        preferences={completedPreferences}
-        onFinish={handleFinishCompletion}
-      />
+      <div className="min-h-screen bg-stroom-ivory text-stroom-black py-4">
+        <QuizCompletionScreen
+          preferences={completedPreferences}
+          onFinish={handleFinishCompletion}
+        />
+      </div>
     );
   }
 

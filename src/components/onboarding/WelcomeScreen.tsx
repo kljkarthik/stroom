@@ -1,5 +1,6 @@
 import React from 'react';
-import { Compass, Users, Sparkles, MapPin, ArrowRight, ShieldCheck } from 'lucide-react';
+import { StroomLogo } from '../common/StroomLogo';
+import { Compass, Users, Sparkles, MapPin, ArrowRight, Trophy, Heart } from 'lucide-react';
 
 interface WelcomeScreenProps {
   onStart: () => void;
@@ -9,105 +10,84 @@ interface WelcomeScreenProps {
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart, onSkip, isLoading }) => {
   return (
-    <div className="min-h-[90vh] flex flex-col justify-between max-w-md mx-auto px-4 py-8 animate-fade-in">
+    <div className="min-h-[85vh] flex flex-col justify-between max-w-md mx-auto px-4 py-6 animate-fade-in text-stroom-black">
       {/* Top Brand Pill & Skip */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold tracking-wide">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-spin" style={{ animationDuration: '6s' }} />
-          <span>VIBE ONBOARDING</span>
-        </div>
+      <div className="flex items-center justify-between mb-3">
+        <StroomLogo variant="dark" size="xs" showSubtitle={false} />
         <button
           onClick={onSkip}
           disabled={isLoading}
-          className="text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors py-1 px-2.5 rounded-lg hover:bg-slate-800/60"
+          className="text-xs font-bold text-stroom-charcoal/70 hover:text-stroom-black transition-colors py-1.5 px-3 rounded-xl hover:bg-stroom-cream/60"
         >
           Skip for now
         </button>
       </div>
 
-      {/* Hero Visual Card */}
-      <div className="relative my-4 rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-b from-slate-900 to-slate-950 shadow-2xl">
-        <div className="relative h-64 sm:h-72 w-full overflow-hidden">
+      {/* Hero Visual Card Inspired by Poster */}
+      <div className="relative my-2 rounded-3xl overflow-hidden border border-stroom-borderLight bg-white shadow-brand">
+        <div className="relative h-60 sm:h-64 w-full overflow-hidden bg-stroom-cream">
           <img
-            src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800&auto=format&fit=crop&q=80"
-            alt="Friends laughing and connecting at sunset"
-            className="w-full h-full object-cover object-center filter brightness-90 hover:scale-105 transition-transform duration-700"
+            src="/brand/stroom-community-hero.jpg"
+            alt="STROOM Community Friends Meetup"
+            className="w-full h-full object-cover object-center filter hover:scale-105 transition-transform duration-700"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-          
+          <div className="absolute inset-0 bg-gradient-to-t from-stroom-black/85 via-stroom-black/30 to-transparent" />
+
           {/* Floating Vibe Badges */}
-          <div className="absolute top-4 left-4 inline-flex items-center gap-1.5 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-xs font-medium text-white shadow-lg animate-slide-up">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>Over 2,400 active vibes</span>
+          <div className="absolute top-3 left-3 inline-flex items-center gap-1.5 bg-stroom-black/80 backdrop-blur-md px-3 py-1 rounded-full border border-stroom-orange/30 text-[11px] font-black text-stroom-orange shadow-lg">
+            <span className="w-2 h-2 rounded-full bg-stroom-orange animate-ping" />
+            <span>Real Connections • Zero Small Talk</span>
           </div>
 
-          <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md px-2.5 py-1 rounded-xl text-xs font-medium text-white border border-white/10">
-              <Users className="w-3 h-3 text-indigo-300" />
-              <span>Communities</span>
+          <div className="absolute bottom-3 left-3 right-3 flex flex-wrap gap-1.5">
+            <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-xl text-[11px] font-extrabold text-white border border-white/20">
+              <Trophy className="w-3 h-3 text-stroom-orange" />
+              <span>Cricket Auctions</span>
             </span>
-            <span className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md px-2.5 py-1 rounded-xl text-xs font-medium text-white border border-white/10">
-              <MapPin className="w-3 h-3 text-rose-300" />
-              <span>Social Meetups</span>
+            <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-xl text-[11px] font-extrabold text-white border border-white/20">
+              <Users className="w-3 h-3 text-stroom-cream" />
+              <span>Meetups</span>
             </span>
-            <span className="inline-flex items-center gap-1 bg-white/15 backdrop-blur-md px-2.5 py-1 rounded-xl text-xs font-medium text-white border border-white/10">
+            <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-xl text-[11px] font-extrabold text-white border border-white/20">
               <Compass className="w-3 h-3 text-amber-300" />
-              <span>Travel & Trips</span>
+              <span>Trips</span>
             </span>
           </div>
         </div>
 
         {/* Copy Section */}
-        <div className="p-6 text-left">
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-3">
-            Find your <span className="vibe-gradient-text">people.</span>
-          </h1>
-          <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Discover communities, meet like-minded people, and find authentic experiences that match your exact vibe.
+        <div className="p-6">
+          <span className="text-[10px] font-black uppercase tracking-widest text-stroom-deep">
+            Welcome to STROOM
+          </span>
+          <h2 className="text-xl sm:text-2xl font-black text-stroom-black mt-1 font-display leading-tight">
+            Strangers Today.<br />
+            <span className="text-stroom-orange">Stories Tomorrow.</span>
+          </h2>
+          <p className="text-xs sm:text-sm text-stroom-charcoal/80 mt-2 leading-relaxed">
+            Answer 4 quick vibe questions to personalize your auction table recommendations, sports leagues, and weekend cafe mixers.
           </p>
+
+          <div className="mt-4 pt-3 border-t border-stroom-borderLight flex items-center justify-between text-[11px] text-stroom-charcoal/70">
+            <span>⏱ Takes under 60 seconds</span>
+            <span className="font-bold text-stroom-deep">100% Real People</span>
+          </div>
         </div>
       </div>
 
-      {/* Value Proposition Highlights */}
-      <div className="grid grid-cols-2 gap-3 my-2 text-left">
-        <div className="p-3.5 rounded-2xl bg-slate-900/50 border border-slate-800/80">
-          <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center mb-2">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <p className="text-xs font-semibold text-white">Personalized for you</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Custom feed tailored to your interests</p>
-        </div>
-        <div className="p-3.5 rounded-2xl bg-slate-900/50 border border-slate-800/80">
-          <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-2">
-            <ShieldCheck className="w-4 h-4" />
-          </div>
-          <p className="text-xs font-semibold text-white">You're in control</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Update or retake anytime in settings</p>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="space-y-3 mt-4 text-center">
+      {/* Action Footer */}
+      <div className="space-y-2 mt-4">
         <button
           onClick={onStart}
           disabled={isLoading}
-          className="w-full py-4 px-6 rounded-2xl vibe-gradient-bg text-white font-bold text-base shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2 group disabled:opacity-60"
+          className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-extrabold text-sm shadow-brand hover:brightness-105 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
         >
-          {isLoading ? (
-            <span className="inline-flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Preparing your quiz...</span>
-            </span>
-          ) : (
-            <>
-              <span>Let's find my vibe</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </>
-          )}
+          <span>{isLoading ? 'Calibrating Vibes...' : 'Start My Vibe Quiz'}</span>
+          <ArrowRight className="w-4 h-4" />
         </button>
 
-        <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
-          <span>Just a few quick questions. You can change your preferences anytime.</span>
+        <p className="text-[10px] text-stroom-charcoal/50 text-center font-medium">
+          You can update or retake your quiz preferences at any time from your profile.
         </p>
       </div>
     </div>

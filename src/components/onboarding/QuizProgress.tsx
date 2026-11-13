@@ -17,20 +17,20 @@ export const QuizProgress: React.FC<QuizProgressProps> = ({
 
   return (
     <div className="w-full mb-6">
-      <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mb-2">
-        <span className="text-indigo-400 uppercase tracking-wider text-[11px]">
+      <div className="flex items-center justify-between text-xs font-bold text-stroom-charcoal/70 mb-2">
+        <span className="text-stroom-deep uppercase tracking-wider text-[11px] font-black">
           Question {currentStep + 1} of {totalSteps}
         </span>
         <div className="flex items-center gap-3">
           {isSaving && (
-            <span className="text-[11px] text-slate-400 flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
+            <span className="text-[11px] text-stroom-orange flex items-center gap-1 font-bold">
+              <span className="w-2 h-2 rounded-full bg-stroom-orange animate-ping" />
               Saving...
             </span>
           )}
           <button
             onClick={onSkip}
-            className="text-slate-400 hover:text-slate-200 transition-colors hover:underline text-xs"
+            className="text-stroom-charcoal/60 hover:text-stroom-black transition-colors hover:underline text-xs font-semibold"
           >
             Skip for now
           </button>
@@ -38,9 +38,9 @@ export const QuizProgress: React.FC<QuizProgressProps> = ({
       </div>
 
       {/* Progress Track & Bar */}
-      <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden p-0.5">
+      <div className="h-2 w-full bg-stroom-cream rounded-full overflow-hidden p-0.5 border border-stroom-orange/20">
         <div
-          className="h-full rounded-full vibe-gradient-bg transition-all duration-500 ease-out shadow-sm shadow-indigo-500/50"
+          className="h-full rounded-full bg-gradient-to-r from-stroom-orange to-stroom-deep transition-all duration-500 ease-out shadow-sm"
           style={{ width: `${percentage}%` }}
         />
       </div>
@@ -51,7 +51,7 @@ export const QuizProgress: React.FC<QuizProgressProps> = ({
           <div
             key={idx}
             className={`h-1 flex-1 mx-0.5 rounded-full transition-colors duration-300 ${
-              idx <= currentStep ? 'bg-indigo-500/60' : 'bg-slate-800'
+              idx <= currentStep ? 'bg-stroom-orange' : 'bg-stroom-borderLight'
             }`}
           />
         ))}

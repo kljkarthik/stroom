@@ -2,11 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from '../db/database';
 import { User } from '../types';
+import { AdminPermission, hasPermission, hasAnyAdminAccess } from '../services/rbacService';
+import { config } from '../config/env';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'stroom_jwt_super_secret_vibe_key_2026';
+const JWT_SECRET = config.jwtSecret;
 
 export interface AuthRequest extends Request {
-  user?: User;
+  user?: User & { account_status?: string };
 }
 
 export function generateToken(user: { id: string; email: string; role: string }): string {
@@ -26,10 +28,16 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   const token = authHeader.split(' ')[1];
   try {
     const payload = jwt.verify(token, JWT_SECRET) as { id: string; email: string; role: string };
-    const user = db.prepare('SELECT id, email, full_name, avatar_url, role, onboarding_status, created_at, updated_at FROM users WHERE id = ?').get(payload.id) as User | undefined;
-    
+    const user = db.prepare(
+      'SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?'
+    ).get(payload.id) as (User & { account_status?: string }) | undefined;
+
     if (!user) {
       return res.status(401).json({ error: 'User not found or session expired.' });
+    }
+
+    if (user.account_status === 'suspended') {
+      return res.status(403).json({ error: 'Account suspended. Please contact STROOM support.' });
     }
 
     req.user = user;
@@ -44,11 +52,25 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
     return res.status(401).json({ error: 'Authentication required.' });
   }
 
-  if (req.user.role !== 'admin') {
+  if (!hasAnyAdminAccess(req.user.role)) {
     return res.status(403).json({ error: 'Forbidden: Administrator privileges required.' });
   }
 
   next();
+}
+
+export function requirePermission(permission: AdminPermission) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    if (!hasPermission(req.user.role, permission)) {
+      return res.status(403).json({ error: `Forbidden: Missing required permission (${permission}).` });
+    }
+
+    next();
+  };
 }
 
 export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
@@ -57,8 +79,10 @@ export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction
     const token = authHeader.split(' ')[1];
     try {
       const payload = jwt.verify(token, JWT_SECRET) as { id: string; email: string; role: string };
-      const user = db.prepare('SELECT id, email, full_name, avatar_url, role, onboarding_status, created_at, updated_at FROM users WHERE id = ?').get(payload.id) as User | undefined;
-      if (user) {
+      const user = db.prepare(
+        'SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?'
+      ).get(payload.id) as (User & { account_status?: string }) | undefined;
+      if (user && user.account_status !== 'suspended') {
         req.user = user;
       }
     } catch {

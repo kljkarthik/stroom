@@ -19,16 +19,16 @@ export const QuizNavigation: React.FC<QuizNavigationProps> = ({
   isSubmitting
 }) => {
   return (
-    <div className="flex items-center justify-between gap-3 pt-6 mt-4 border-t border-slate-800/80">
+    <div className="flex items-center justify-between gap-3 pt-6 mt-4 border-t border-stroom-borderLight">
       {/* Back Button */}
       {canGoBack ? (
         <button
           type="button"
           onClick={onBack}
           disabled={isSubmitting}
-          className="py-3 px-4 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white font-medium text-sm flex items-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-40"
+          className="py-3 px-4 rounded-xl border border-stroom-borderLight bg-white hover:bg-stroom-cream text-stroom-charcoal hover:text-stroom-black font-extrabold text-sm flex items-center gap-1.5 transition-all active:scale-[0.98] disabled:opacity-40"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 text-stroom-orange" />
           <span>Back</span>
         </button>
       ) : (
@@ -40,10 +40,10 @@ export const QuizNavigation: React.FC<QuizNavigationProps> = ({
         type="button"
         onClick={onNext}
         disabled={!isValid || isSubmitting}
-        className={`flex-1 max-w-xs py-3.5 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg ${
+        className={`flex-1 max-w-xs py-3.5 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-brand ${
           isValid && !isSubmitting
-            ? 'vibe-gradient-bg text-white shadow-indigo-500/25 hover:shadow-indigo-500/40 cursor-pointer'
-            : 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed shadow-none'
+            ? 'bg-gradient-to-r from-stroom-orange to-stroom-deep text-white hover:brightness-105 cursor-pointer'
+            : 'bg-stone-200 text-stone-400 border border-stone-300 cursor-not-allowed shadow-none'
         }`}
       >
         {isSubmitting ? (

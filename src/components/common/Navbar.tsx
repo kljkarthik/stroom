@@ -1,179 +1,513 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { StroomLogo } from './StroomLogo';
+import { NotificationDropdown } from './NotificationDropdown';
 import {
+  Trophy,
   Compass,
   Shield,
   User as UserIcon,
   Sparkles,
   LogOut,
   ChevronDown,
-  RotateCcw,
-  Check
+  Building2,
+  Home,
+  Menu,
+  X,
+  Ticket,
+  Users,
+  Info,
+  HelpCircle,
+  Flame,
+  ArrowRight,
+  Award,
+  Sliders
 } from 'lucide-react';
 
+export type ActiveTab =
+  | 'landing'
+  | 'discover'
+  | 'event_details'
+  | 'communities'
+  | 'community_details'
+  | 'about'
+  | 'partner_with_us'
+  | 'contact_faq'
+  | 'auction'
+  | 'participant'
+  | 'partner'
+  | 'admin';
+
 interface NavbarProps {
-  currentTab: 'discover' | 'admin' | 'profile';
-  onSelectTab: (tab: 'discover' | 'admin' | 'profile') => void;
+  currentTab: ActiveTab;
+  onSelectTab: (tab: ActiveTab) => void;
   onTriggerQuiz: () => void;
+  onOpenAuth: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onTriggerQuiz }) => {
-  const { user, isAdmin, logout, loginAsDemoUser } = useAuth();
+export const Navbar: React.FC<NavbarProps> = ({
+  currentTab,
+  onSelectTab,
+  onTriggerQuiz,
+  onOpenAuth,
+}) => {
+  const { user, isAuthenticated, isAdmin, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+
+  // If in auction view, use dark theme navbar to match the arena!
+  const isAuctionTab = currentTab === 'auction';
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl border-b border-white/5">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-        {/* Brand Logo */}
+    <header
+      className={`sticky top-0 z-40 transition-colors ${
+        isAuctionTab
+          ? 'bg-stroom-black/95 backdrop-blur-xl border-b border-stroom-borderDark text-white'
+          : 'bg-stroom-ivory/95 backdrop-blur-xl border-b border-stroom-borderLight text-stroom-black shadow-xs'
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        
+        {/* Brand Logo & Full Identity */}
         <div
-          onClick={() => onSelectTab('discover')}
-          className="flex items-center gap-2.5 cursor-pointer group"
+          onClick={() => onSelectTab('landing')}
+          className="flex items-center gap-3 cursor-pointer group select-none py-1.5"
+          title="STROOM — Strangers Today. Stories Tomorrow."
         >
-          <div className="w-9 h-9 rounded-2xl vibe-gradient-bg flex items-center justify-center text-white shadow-md shadow-indigo-500/25 group-hover:scale-105 transition-transform">
-            <Sparkles className="w-5 h-5 fill-white" />
-          </div>
-          <div>
-            <span className="text-xl font-extrabold tracking-tight text-white group-hover:text-indigo-400 transition-colors">
-              stroom
-            </span>
-            <span className="hidden sm:inline-block ml-2 text-[10px] font-bold uppercase tracking-widest text-indigo-400 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20">
-              SOCIAL VIBES
-            </span>
-          </div>
+          <StroomLogo
+            variant={isAuctionTab ? 'light' : 'dark'}
+            size="md"
+            showSubtitle={true}
+          />
         </div>
 
-        {/* Center Navigation Links (Desktop) */}
-        <nav className="hidden md:flex items-center gap-1.5 p-1 rounded-2xl bg-slate-900/90 border border-white/5">
+        {/* Desktop Navigation Links */}
+        <nav
+          className={`hidden xl:flex items-center gap-1 p-1.5 rounded-2xl border ${
+            isAuctionTab
+              ? 'bg-stroom-cardDark/90 border-stroom-borderDark'
+              : 'bg-white/90 border-stroom-borderLight shadow-xs'
+          }`}
+        >
           <button
-            onClick={() => onSelectTab('discover')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              currentTab === 'discover'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => onSelectTab('landing')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
+              currentTab === 'landing'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : isAuctionTab
+                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
+                : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
             }`}
           >
-            <Compass className="w-4 h-4" />
+            <Home className="w-3.5 h-3.5" />
+            <span>Home</span>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('discover')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
+              currentTab === 'discover' || currentTab === 'event_details'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : isAuctionTab
+                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
+                : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5" />
             <span>Discover</span>
           </button>
 
           <button
-            onClick={onTriggerQuiz}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-indigo-300 transition-colors"
-          >
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            <span>Vibe Quiz</span>
-          </button>
-
-          {isAdmin && (
-            <button
-              onClick={() => onSelectTab('admin')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                currentTab === 'admin'
-                  ? 'bg-amber-600 text-white shadow-md'
-                  : 'text-amber-400 hover:text-amber-300'
-              }`}
-            >
-              <Shield className="w-4 h-4" />
-              <span>Admin CMS</span>
-            </button>
-          )}
-
-          <button
-            onClick={() => onSelectTab('profile')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              currentTab === 'profile'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+            onClick={() => onSelectTab('communities')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
+              currentTab === 'communities' || currentTab === 'community_details'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : isAuctionTab
+                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
+                : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
             }`}
           >
-            <UserIcon className="w-4 h-4" />
-            <span>Profile</span>
+            <Users className="w-3.5 h-3.5" />
+            <span>Communities</span>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('about')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
+              currentTab === 'about'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : isAuctionTab
+                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
+                : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
+            }`}
+          >
+            <Info className="w-3.5 h-3.5" />
+            <span>About</span>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('partner_with_us')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
+              currentTab === 'partner_with_us' || currentTab === 'partner'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : isAuctionTab
+                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
+                : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Partner With Us</span>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('contact_faq')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
+              currentTab === 'contact_faq'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : isAuctionTab
+                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
+                : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
+            }`}
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>FAQs</span>
+          </button>
+
+          {/* Auction Hub Quick Access */}
+          <button
+            onClick={() => onSelectTab('auction')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ml-1 ${
+              currentTab === 'auction'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : 'bg-stroom-black text-stroom-cream hover:bg-stone-800'
+            }`}
+          >
+            <Trophy className="w-3.5 h-3.5 text-stroom-orange" />
+            <span>Auction Arena</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-stroom-orange animate-ping" />
           </button>
         </nav>
 
-        {/* Right Section: User & Quick Switcher */}
-        <div className="flex items-center gap-3">
-          {/* Demo User Switcher Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center gap-2 p-1.5 pr-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-medium text-slate-200 transition-colors"
-            >
-              <img
-                src={user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-                alt={user?.full_name}
-                className="w-7 h-7 rounded-xl object-cover border border-indigo-500/40"
-              />
-              <span className="max-w-[100px] truncate hidden sm:inline-block font-semibold">
-                {user?.full_name?.split(' ')[0]}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-            </button>
+        {/* Right Section: User & Account Switcher */}
+        <div className="flex items-center gap-2.5">
+          {isAuthenticated && (
+            <NotificationDropdown dark={isAuctionTab} />
+          )}
 
-            {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-2 z-50 animate-slide-up text-left">
-                <div className="px-3 py-2 border-b border-slate-800">
-                  <p className="text-xs font-bold text-white truncate">{user?.full_name}</p>
-                  <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
-                  <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-indigo-400">
-                    <span>STATUS: {user?.onboarding_status}</span>
+          {isAuthenticated ? (
+            <div className="relative">
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className={`flex items-center gap-2 p-1.5 pr-3 rounded-2xl border text-xs font-extrabold transition-colors ${
+                  isAuctionTab
+                    ? 'bg-stroom-surfaceDark border-stroom-borderDark text-white hover:border-stroom-orange'
+                    : 'bg-white border-stroom-borderLight text-stroom-black hover:border-stroom-orange'
+                }`}
+              >
+                <div className="w-7 h-7 rounded-xl bg-stroom-orange text-white flex items-center justify-center font-bold text-xs">
+                  {user?.full_name?.charAt(0) || 'U'}
+                </div>
+                <span className="hidden sm:inline max-w-[100px] truncate">
+                  {user?.full_name || 'Member'}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
+              </button>
+
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white border border-stroom-borderLight shadow-2xl p-2 z-50 text-stroom-black animate-fade-in">
+                  <div className="p-2 border-b border-stroom-cream mb-1">
+                    <p className="text-xs font-black text-stroom-black truncate">{user?.full_name}</p>
+                    <p className="text-[10px] text-stroom-charcoal/70 truncate">{user?.email}</p>
+                    <span className="inline-block mt-1 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-stroom-cream text-stroom-deep">
+                      {user?.role === 'admin' ? 'Administrator' : 'Participant'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => {
+                        onSelectTab('participant');
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left p-2 rounded-xl text-xs font-bold hover:bg-stroom-cream flex items-center gap-2"
+                    >
+                      <Ticket className="w-3.5 h-3.5 text-stroom-orange" />
+                      <span>Participant Hub & Passes</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onSelectTab('participant');
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left p-2 rounded-xl text-xs font-bold hover:bg-stroom-cream flex items-center gap-2"
+                    >
+                      <Award className="w-3.5 h-3.5 text-stroom-gold" />
+                      <span>STROOM Passport</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onSelectTab('participant');
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left p-2 rounded-xl text-xs font-bold hover:bg-stroom-cream flex items-center gap-2"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-stroom-charcoal" />
+                      <span>Profile Studio</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onSelectTab('auction');
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left p-2 rounded-xl text-xs font-bold hover:bg-stroom-cream flex items-center gap-2"
+                    >
+                      <Trophy className="w-3.5 h-3.5 text-stroom-orange" />
+                      <span>Live Cricket Auction</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onSelectTab('partner');
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left p-2 rounded-xl text-xs font-bold hover:bg-stroom-cream flex items-center gap-2"
+                    >
+                      <Building2 className="w-3.5 h-3.5 text-stroom-orange" />
+                      <span>Partner Portal Dashboard</span>
+                    </button>
+
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          onSelectTab('admin');
+                          setDropdownOpen(false);
+                        }}
+                        className="w-full text-left p-2 rounded-xl text-xs font-bold hover:bg-stroom-cream flex items-center gap-2 text-stroom-deep"
+                      >
+                        <Shield className="w-3.5 h-3.5 text-stroom-orange" />
+                        <span>Admin Console</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        onTriggerQuiz();
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left p-2 rounded-xl text-xs font-bold hover:bg-stroom-cream flex items-center gap-2"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-stroom-orange" />
+                      <span>Retake Vibe Quiz</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        logout();
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left p-2 rounded-xl text-xs font-bold hover:bg-red-50 text-red-600 flex items-center gap-2"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
                   </div>
                 </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onOpenAuth}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-extrabold text-xs shadow-brand hover:brightness-105 transition-all flex items-center gap-1.5"
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Sign In / Join</span>
+              </button>
+            </div>
+          )}
 
-                <div className="py-1">
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Quick Testing Simulation:
-                  </p>
-                  <button
-                    onClick={() => {
-                      loginAsDemoUser('newUser');
-                      setDropdownOpen(false);
-                    }}
-                    className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800 rounded-xl flex items-center justify-between"
-                  >
-                    <span>Simulate 1st Login (Sam)</span>
-                    <RotateCcw className="w-3 h-3 text-indigo-400" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      loginAsDemoUser('admin');
-                      setDropdownOpen(false);
-                      onSelectTab('admin');
-                    }}
-                    className="w-full px-3 py-1.5 text-left text-xs text-amber-300 hover:bg-slate-800 rounded-xl flex items-center justify-between"
-                  >
-                    <span>Switch to Admin (Alex)</span>
-                    <Shield className="w-3 h-3 text-amber-400" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      loginAsDemoUser('completedUser');
-                      setDropdownOpen(false);
-                    }}
-                    className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800 rounded-xl flex items-center justify-between"
-                  >
-                    <span>Simulate Completed User</span>
-                    <Check className="w-3 h-3 text-emerald-400" />
-                  </button>
-                </div>
+          {/* Mobile Hamburger Toggle */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className={`xl:hidden p-2 rounded-xl border ${
+              isAuctionTab
+                ? 'bg-stroom-surfaceDark border-stroom-borderDark text-white'
+                : 'bg-white border-stroom-borderLight text-stroom-black'
+            }`}
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
 
-                <div className="pt-1 border-t border-slate-800">
-                  <button
-                    onClick={() => {
-                      logout();
-                      setDropdownOpen(false);
-                    }}
-                    className="w-full px-3 py-1.5 text-left text-xs text-rose-400 hover:bg-rose-500/10 rounded-xl flex items-center gap-2"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              </div>
+      </div>
+
+      {/* Mobile Menu Dropdown */}
+      {mobileMenuOpen && (
+        <div
+          className={`xl:hidden border-t px-4 py-4 space-y-1.5 animate-fade-in ${
+            isAuctionTab
+              ? 'bg-stroom-cardDark border-stroom-borderDark text-white'
+              : 'bg-stroom-ivory border-stroom-borderLight text-stroom-black'
+          }`}
+        >
+          <button
+            onClick={() => {
+              onSelectTab('landing');
+              setMobileMenuOpen(false);
+            }}
+            className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+              currentTab === 'landing'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : 'hover:bg-stroom-cream/60'
+            }`}
+          >
+            <Home className="w-4 h-4" />
+            <span>Home</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onSelectTab('discover');
+              setMobileMenuOpen(false);
+            }}
+            className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+              currentTab === 'discover'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : 'hover:bg-stroom-cream/60'
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            <span>Discover Events</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onSelectTab('communities');
+              setMobileMenuOpen(false);
+            }}
+            className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+              currentTab === 'communities'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : 'hover:bg-stroom-cream/60'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Communities</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onSelectTab('about');
+              setMobileMenuOpen(false);
+            }}
+            className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+              currentTab === 'about'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : 'hover:bg-stroom-cream/60'
+            }`}
+          >
+            <Info className="w-4 h-4" />
+            <span>About STROOM</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onSelectTab('partner_with_us');
+              setMobileMenuOpen(false);
+            }}
+            className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+              currentTab === 'partner_with_us'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : 'hover:bg-stroom-cream/60'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Partner With Us</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onSelectTab('contact_faq');
+              setMobileMenuOpen(false);
+            }}
+            className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+              currentTab === 'contact_faq'
+                ? 'bg-stroom-orange text-white shadow-brand'
+                : 'hover:bg-stroom-cream/60'
+            }`}
+          >
+            <HelpCircle className="w-4 h-4" />
+            <span>FAQs & Contact</span>
+          </button>
+
+          <div className="pt-2 border-t border-stone-200 dark:border-stone-800 space-y-1.5">
+            <button
+              onClick={() => {
+                onSelectTab('auction');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+                currentTab === 'auction'
+                  ? 'bg-stroom-orange text-white shadow-brand'
+                  : 'bg-stroom-black text-stroom-cream hover:bg-stone-800'
+              }`}
+            >
+              <Trophy className="w-4 h-4 text-stroom-orange" />
+              <span>Live Cricket Auction Arena</span>
+            </button>
+
+            <button
+              onClick={() => {
+                onSelectTab('participant');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+                currentTab === 'participant'
+                  ? 'bg-stroom-orange text-white shadow-brand'
+                  : 'hover:bg-stroom-cream/60'
+              }`}
+            >
+              <Ticket className="w-4 h-4" />
+              <span>Participant Hub & Passes</span>
+            </button>
+
+            <button
+              onClick={() => {
+                onSelectTab('partner');
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+                currentTab === 'partner'
+                  ? 'bg-stroom-orange text-white shadow-brand'
+                : 'hover:bg-stroom-cream/60'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Partner Dashboard</span>
+            </button>
+
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  onSelectTab('admin');
+                  setMobileMenuOpen(false);
+                }}
+                className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
+                  currentTab === 'admin'
+                    ? 'bg-stroom-orange text-white shadow-brand'
+                    : 'hover:bg-stroom-cream/60'
+                }`}
+              >
+                <Shield className="w-4 h-4" />
+                <span>Admin Console</span>
+              </button>
             )}
           </div>
         </div>
-      </div>
+      )}
     </header>
   );
 };

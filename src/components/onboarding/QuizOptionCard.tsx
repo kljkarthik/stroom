@@ -67,10 +67,10 @@ export const QuizOptionCard: React.FC<QuizOptionCardProps> = ({
       type="button"
       onClick={onSelect}
       disabled={disabled}
-      className={`w-full p-4 rounded-2xl border text-left transition-all duration-200 flex items-center justify-between group active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-indigo-500/50 ${
+      className={`w-full p-4 rounded-2xl border text-left transition-all duration-200 flex items-center justify-between group active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-stroom-orange/30 ${
         isSelected
-          ? 'bg-gradient-to-r from-indigo-950/70 via-indigo-900/40 to-slate-900/90 border-indigo-500 text-white shadow-lg shadow-indigo-500/10'
-          : 'bg-slate-900/60 hover:bg-slate-800/60 border-slate-800/80 hover:border-slate-700 text-slate-200'
+          ? 'bg-stroom-cream/90 border-stroom-orange text-stroom-black shadow-brand'
+          : 'bg-white hover:bg-stroom-cream/40 border-stroom-borderLight text-stroom-charcoal'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       <div className="flex items-center gap-3.5 min-w-0 pr-2">
@@ -78,8 +78,8 @@ export const QuizOptionCard: React.FC<QuizOptionCardProps> = ({
         <div
           className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
             isSelected
-              ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/30'
-              : 'bg-slate-800/90 text-slate-400 group-hover:text-slate-200 group-hover:bg-slate-700/80'
+              ? 'bg-stroom-orange text-white shadow-brand'
+              : 'bg-stroom-cream text-stroom-deep group-hover:bg-stroom-orange group-hover:text-white'
           }`}
         >
           {getOptionIcon(option.stable_value)}
@@ -87,10 +87,10 @@ export const QuizOptionCard: React.FC<QuizOptionCardProps> = ({
 
         {/* Option Text */}
         <div className="min-w-0">
-          <p className={`text-base font-medium leading-tight truncate ${isSelected ? 'text-white font-semibold' : 'text-slate-200'}`}>
+          <p className={`text-base font-extrabold leading-tight truncate ${isSelected ? 'text-stroom-black' : 'text-stroom-charcoal'}`}>
             {option.label}
           </p>
-          <p className="text-[11px] text-slate-400 mt-0.5 uppercase tracking-wider font-mono">
+          <p className="text-[11px] text-stroom-deep/70 mt-0.5 uppercase tracking-wider font-mono">
             #{option.stable_value.replace(/_/g, '-')}
           </p>
         </div>
@@ -100,14 +100,14 @@ export const QuizOptionCard: React.FC<QuizOptionCardProps> = ({
       <div
         className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 border transition-all ${
           isSelected
-            ? 'bg-indigo-500 border-indigo-500 text-white shadow-sm'
-            : 'border-slate-700 bg-slate-950/50 group-hover:border-slate-600'
+            ? 'bg-stroom-orange border-stroom-orange text-white shadow-sm'
+            : 'border-stroom-borderLight bg-stroom-ivory group-hover:border-stroom-orange/40'
         }`}
       >
         {isSelected ? (
           <Check className="w-3.5 h-3.5 stroke-[3]" />
         ) : (
-          <div className="w-2 h-2 rounded-full bg-transparent group-hover:bg-slate-700 transition-colors" />
+          <div className="w-2 h-2 rounded-full bg-transparent group-hover:bg-stroom-orange/40 transition-colors" />
         )}
       </div>
     </button>

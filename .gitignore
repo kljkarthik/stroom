@@ -1,5 +1,12 @@
 node_modules
 dist
+.env
+.env.local
+.env.*.local
+.env.production
+!.env.example
+backups
+data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm

@@ -1,8 +1,10 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../db/database';
-import { requireAuth, requireAdmin, AuthRequest } from '../middleware/auth';
+import { requireAuth, requireAdmin, requirePermission, AuthRequest } from '../middleware/auth';
 import { QuizQuestion, QuizOption, QuizVersion } from '../types';
+import adminHubRouter from './adminHub';
+import { recordAuditLog } from '../services/auditService';
 
 const router = Router();
 
@@ -10,9 +12,12 @@ const router = Router();
 router.use(requireAuth);
 router.use(requireAdmin);
 
+// Mount centralized Phase 6 Admin Control Center routes
+router.use('/', adminHubRouter);
+
 // 1. GET /api/admin/overview
 // Quiz statistics, completion rates, and version status
-router.get('/overview', (req: AuthRequest, res: Response) => {
+router.get('/overview', requirePermission('overview.view'), (req: AuthRequest, res: Response) => {
   try {
     const totalSessions = db.prepare('SELECT count(*) as count FROM quiz_sessions').get() as { count: number };
     const completedSessions = db.prepare("SELECT count(*) as count FROM quiz_sessions WHERE status = 'COMPLETED'").get() as { count: number };
@@ -70,7 +75,7 @@ router.get('/overview', (req: AuthRequest, res: Response) => {
 
 // 2. GET /api/admin/quizzes
 // Lists quizzes and their version history
-router.get('/quizzes', (req: AuthRequest, res: Response) => {
+router.get('/quizzes', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const quizzes = db.prepare('SELECT * FROM quizzes ORDER BY created_at DESC').all() as any[];
 
@@ -95,7 +100,7 @@ router.get('/quizzes', (req: AuthRequest, res: Response) => {
 
 // 3. GET /api/admin/versions/:versionId
 // Full question & options tree for a version
-router.get('/versions/:versionId', (req: AuthRequest, res: Response) => {
+router.get('/versions/:versionId', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const { versionId } = req.params;
     const version = db.prepare(`
@@ -134,7 +139,7 @@ router.get('/versions/:versionId', (req: AuthRequest, res: Response) => {
 
 // 4. POST /api/admin/quizzes/:quizId/create-draft
 // Clones active published version into a draft (or creates blank draft)
-router.post('/quizzes/:quizId/create-draft', (req: AuthRequest, res: Response) => {
+router.post('/quizzes/:quizId/create-draft', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const { quizId } = req.params;
 
@@ -170,7 +175,7 @@ router.post('/quizzes/:quizId/create-draft', (req: AuthRequest, res: Response) =
       db.prepare(`
         INSERT INTO quiz_versions (id, quiz_id, version_number, publication_status, created_by)
         VALUES (?, ?, ?, 'draft', ?)
-      `).run(newVersionId, quizId, newVersionNumber, req.user!.full_name);
+      `).run(newVersionId, quizId, newVersionNumber, req.user?.full_name || req.user?.email || 'Administrator');
 
       if (latestPublished) {
         // Clone questions & options
@@ -228,7 +233,7 @@ router.post('/quizzes/:quizId/create-draft', (req: AuthRequest, res: Response) =
 
 // 5. POST /api/admin/questions
 // Adds a question to a draft version
-router.post('/questions', (req: AuthRequest, res: Response) => {
+router.post('/questions', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const {
       quiz_version_id,
@@ -284,8 +289,12 @@ router.post('/questions', (req: AuthRequest, res: Response) => {
 
         options.forEach((opt: any, idx: number) => {
           const optId = 'opt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-          const stableValue = (opt.stable_value || opt.label.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 50);
-          insertOpt.run(optId, questionId, opt.label, stableValue, idx + 1);
+          const safeLabel = opt && opt.label ? String(opt.label).trim() : `Option ${idx + 1}`;
+          const stableValue = (opt && opt.stable_value
+            ? String(opt.stable_value)
+            : safeLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_') || `opt_${idx + 1}`
+          ).slice(0, 50);
+          insertOpt.run(optId, questionId, safeLabel, stableValue, idx + 1);
         });
       }
     })();
@@ -305,7 +314,7 @@ router.post('/questions', (req: AuthRequest, res: Response) => {
 
 // 6. PATCH /api/admin/questions/:id
 // Updates question in draft version
-router.patch('/questions/:id', (req: AuthRequest, res: Response) => {
+router.patch('/questions/:id', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const questionId = req.params.id;
     const question = db.prepare(`
@@ -366,7 +375,7 @@ router.patch('/questions/:id', (req: AuthRequest, res: Response) => {
 
 // 7. DELETE /api/admin/questions/:id
 // Deletes question from draft
-router.delete('/questions/:id', (req: AuthRequest, res: Response) => {
+router.delete('/questions/:id', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const questionId = req.params.id;
     const question = db.prepare(`
@@ -397,7 +406,7 @@ router.delete('/questions/:id', (req: AuthRequest, res: Response) => {
 });
 
 // 8. Reorder questions
-router.post('/questions/reorder', (req: AuthRequest, res: Response) => {
+router.post('/questions/reorder', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const { question_ids } = req.body;
     if (!Array.isArray(question_ids)) {
@@ -419,7 +428,7 @@ router.post('/questions/reorder', (req: AuthRequest, res: Response) => {
 });
 
 // 9. POST /api/admin/questions/:questionId/options
-router.post('/questions/:questionId/options', (req: AuthRequest, res: Response) => {
+router.post('/questions/:questionId/options', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const { questionId } = req.params;
     const { label, stable_value } = req.body;
@@ -446,12 +455,16 @@ router.post('/questions/:questionId/options', (req: AuthRequest, res: Response) 
     const maxOrder = db.prepare('SELECT coalesce(max(display_order), 0) as max_ord FROM options WHERE question_id = ?').get(questionId) as { max_ord: number };
     const display_order = maxOrder.max_ord + 1;
     const optId = 'opt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-    const resolvedValue = (stable_value || label.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 50);
+    const safeLabel = String(label).trim();
+    const resolvedValue = (stable_value
+      ? String(stable_value)
+      : safeLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_') || `opt_${Date.now()}`
+    ).slice(0, 50);
 
     db.prepare(`
       INSERT INTO options (id, question_id, label, stable_value, display_order, is_active)
       VALUES (?, ?, ?, ?, ?, 1)
-    `).run(optId, questionId, label, resolvedValue, display_order);
+    `).run(optId, questionId, safeLabel, resolvedValue, display_order);
 
     const option = db.prepare('SELECT * FROM options WHERE id = ?').get(optId);
     return res.status(201).json({ message: 'Option added', option });
@@ -462,7 +475,7 @@ router.post('/questions/:questionId/options', (req: AuthRequest, res: Response) 
 });
 
 // 10. PATCH /api/admin/options/:id
-router.patch('/options/:id', (req: AuthRequest, res: Response) => {
+router.patch('/options/:id', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const optId = req.params.id;
     const { label, stable_value, display_order, is_active } = req.body;
@@ -505,7 +518,7 @@ router.patch('/options/:id', (req: AuthRequest, res: Response) => {
 });
 
 // 11. DELETE /api/admin/options/:id
-router.delete('/options/:id', (req: AuthRequest, res: Response) => {
+router.delete('/options/:id', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const optId = req.params.id;
     const opt = db.prepare(`
@@ -534,7 +547,7 @@ router.delete('/options/:id', (req: AuthRequest, res: Response) => {
 
 // 12. POST /api/admin/versions/:versionId/publish
 // Validates draft configuration and publishes new immutable version
-router.post('/versions/:versionId/publish', (req: AuthRequest, res: Response) => {
+router.post('/versions/:versionId/publish', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
   try {
     const { versionId } = req.params;
     const version = db.prepare('SELECT * FROM quiz_versions WHERE id = ?').get(versionId) as QuizVersion | undefined;
@@ -599,6 +612,16 @@ router.post('/versions/:versionId/publish', (req: AuthRequest, res: Response) =>
     })();
 
     const updated = db.prepare('SELECT * FROM quiz_versions WHERE id = ?').get(versionId) as QuizVersion;
+
+    recordAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.full_name,
+      actorRole: req.user!.role,
+      action: 'QUIZ_VERSION_PUBLISHED',
+      entityType: 'quiz_version',
+      entityId: versionId,
+      afterData: { version_number: version.version_number, quiz_id: version.quiz_id },
+    });
 
     return res.json({
       message: `Version ${version.version_number} successfully published! It is now the active quiz for all new onboarding sessions.`,

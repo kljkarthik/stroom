@@ -17,7 +17,11 @@ import {
   Layers,
   HelpCircle,
   X,
-  Check
+  Check,
+  RefreshCw,
+  FolderArchive,
+  ChevronRight,
+  ShieldAlert
 } from 'lucide-react';
 import { QuizProgress } from '../onboarding/QuizProgress';
 import { QuizQuestion as QuizQuestionComp } from '../onboarding/QuizQuestion';
@@ -72,13 +76,13 @@ export const AdminDashboard: React.FC = () => {
         api.getAdminQuizzes(),
       ]);
       setOverview(overviewData);
-      setQuizzes(quizzesData.quizzes);
+      setQuizzes(quizzesData.quizzes || []);
 
       // Default select draft version if available, otherwise published version
       const defaultVerId =
         overviewData.draft_version?.id ||
         overviewData.published_version?.id ||
-        quizzesData.quizzes[0]?.versions[0]?.id;
+        quizzesData.quizzes?.[0]?.versions?.[0]?.id;
 
       if (defaultVerId) {
         setSelectedVersionId(defaultVerId);
@@ -115,7 +119,9 @@ export const AdminDashboard: React.FC = () => {
       const res = await api.createDraft(quizzes[0].id);
       setStatusMessage({ type: 'success', text: `Draft version ${res.version_number} created!` });
       await loadAdminData();
-      handleSelectVersion(res.draft_version_id);
+      if (res.draft_version_id) {
+        handleSelectVersion(res.draft_version_id);
+      }
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message || 'Failed to create draft' });
     }
@@ -267,28 +273,30 @@ export const AdminDashboard: React.FC = () => {
   const isDraft = activeVersion?.publication_status === 'draft';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 pb-28 animate-fade-in text-left">
+    <div className="max-w-7xl mx-auto px-4 py-6 pb-28 animate-fade-in text-left text-stroom-black">
       {/* Top Admin Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold tracking-wide mb-2">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>STROOM ADMINISTRATION CMS</span>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stroom-cream border border-stroom-orange/30 text-stroom-deep text-xs font-black tracking-wide mb-2">
+            <Sparkles className="w-3.5 h-3.5 text-stroom-orange" />
+            <span>STROOM VIBE QUIZ ENGINE CMS</span>
           </div>
-          <h1 className="text-3xl font-extrabold text-white">Vibe Quiz Management</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Configure questions, response options, versioning, and preview dynamic quiz flows.
+          <h1 className="text-2xl sm:text-3xl font-black text-stroom-black font-display">
+            Onboarding Quiz & Vibe Taxonomy
+          </h1>
+          <p className="text-xs sm:text-sm text-stroom-charcoal/80 mt-1">
+            Configure dynamic questions, interest tags, versioning, and preview real-time flows.
           </p>
         </div>
 
         {/* Global Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setPreviewMode(!previewMode)}
-            className={`py-2.5 px-4 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all ${
+            className={`py-2.5 px-4 rounded-xl border text-xs font-black flex items-center gap-2 transition-all ${
               previewMode
-                ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/30'
-                : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+                ? 'bg-stroom-orange border-stroom-orange text-white shadow-brand'
+                : 'bg-white border-stroom-borderLight text-stroom-black hover:bg-stroom-cream'
             }`}
           >
             <Smartphone className="w-4 h-4" />
@@ -298,7 +306,7 @@ export const AdminDashboard: React.FC = () => {
           {isDraft && (
             <button
               onClick={() => setShowPublishModal(true)}
-              className="py-2.5 px-5 rounded-xl vibe-gradient-bg text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/30 hover:brightness-110 active:scale-95 transition-all"
+              className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white text-xs font-black flex items-center gap-2 shadow-brand hover:brightness-105 active:scale-95 transition-all"
             >
               <Send className="w-4 h-4" />
               <span>Publish Version {activeVersion?.version_number}</span>
@@ -308,7 +316,7 @@ export const AdminDashboard: React.FC = () => {
           {!isDraft && (
             <button
               onClick={handleCreateDraft}
-              className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-bold flex items-center gap-2 transition-all"
+              className="py-2.5 px-4 rounded-xl bg-stroom-cream hover:bg-stroom-orange hover:text-white border border-stroom-orange/30 text-stroom-black text-xs font-black flex items-center gap-2 transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>Create Draft Version</span>
@@ -320,14 +328,18 @@ export const AdminDashboard: React.FC = () => {
       {/* Status Alert Banner */}
       {statusMessage && (
         <div
-          className={`mb-6 p-4 rounded-2xl border text-xs flex items-center justify-between gap-2 animate-fade-in ${
+          className={`mb-6 p-4 rounded-2xl border text-xs font-bold flex items-center justify-between gap-2 animate-fade-in ${
             statusMessage.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-              : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+              : 'bg-rose-50 border-rose-300 text-rose-800'
           }`}
         >
           <div className="flex items-center gap-2">
-            {statusMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+            {statusMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+            )}
             <span>{statusMessage.text}</span>
           </div>
           <button onClick={() => setStatusMessage(null)}>
@@ -339,188 +351,222 @@ export const AdminDashboard: React.FC = () => {
       {/* Metrics Row */}
       {overview && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/5 shadow-md">
-            <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-xs font-semibold">Total Sessions</span>
-              <BarChart3 className="w-4 h-4 text-indigo-400" />
+          <div className="p-4 rounded-2xl bg-white border border-stroom-borderLight shadow-xs">
+            <div className="flex items-center justify-between text-stroom-charcoal/70 mb-1">
+              <span className="text-xs font-bold uppercase tracking-wider">Total Sessions</span>
+              <BarChart3 className="w-4 h-4 text-stroom-orange" />
             </div>
-            <p className="text-2xl font-black text-white">{overview.stats.total_sessions}</p>
-            <p className="text-[11px] text-slate-500 mt-1">{overview.stats.total_users} registered users</p>
+            <p className="text-2xl font-black text-stroom-black font-display">{overview.stats.total_sessions}</p>
+            <p className="text-[11px] text-stroom-charcoal/60 mt-1">{overview.stats.total_users} registered users</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/5 shadow-md">
-            <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-xs font-semibold">Completion Rate</span>
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <div className="p-4 rounded-2xl bg-white border border-stroom-borderLight shadow-xs">
+            <div className="flex items-center justify-between text-stroom-charcoal/70 mb-1">
+              <span className="text-xs font-bold uppercase tracking-wider">Completed</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             </div>
-            <p className="text-2xl font-black text-emerald-400">{overview.stats.completion_rate}%</p>
-            <p className="text-[11px] text-slate-500 mt-1">{overview.stats.completed_sessions} completed quizzes</p>
+            <p className="text-2xl font-black text-emerald-600 font-display">{overview.stats.completed_sessions}</p>
+            <p className="text-[11px] text-stroom-charcoal/60 mt-1">{overview.stats.completion_rate}% completion rate</p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/5 shadow-md">
-            <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-xs font-semibold">Skip Rate</span>
-              <AlertTriangle className="w-4 h-4 text-amber-400" />
+          <div className="p-4 rounded-2xl bg-white border border-stroom-borderLight shadow-xs">
+            <div className="flex items-center justify-between text-stroom-charcoal/70 mb-1">
+              <span className="text-xs font-bold uppercase tracking-wider">Published Ver.</span>
+              <Layers className="w-4 h-4 text-stroom-orange" />
             </div>
-            <p className="text-2xl font-black text-amber-400">{overview.stats.skip_rate}%</p>
-            <p className="text-[11px] text-slate-500 mt-1">{overview.stats.skipped_sessions} skipped sessions</p>
+            <p className="text-2xl font-black text-stroom-black font-display">
+              {overview.published_version ? `v${overview.published_version.version_number}` : 'None'}
+            </p>
+            <p className="text-[11px] text-stroom-charcoal/60 mt-1">
+              {overview.published_version?.question_count || 0} active questions
+            </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/5 shadow-md">
-            <div className="flex items-center justify-between text-slate-400 mb-1">
-              <span className="text-xs font-semibold">Active Version</span>
-              <Layers className="w-4 h-4 text-purple-400" />
+          <div className="p-4 rounded-2xl bg-white border border-stroom-borderLight shadow-xs">
+            <div className="flex items-center justify-between text-stroom-charcoal/70 mb-1">
+              <span className="text-xs font-bold uppercase tracking-wider">Draft Status</span>
+              <Sparkles className="w-4 h-4 text-stroom-gold" />
             </div>
-            <p className="text-2xl font-black text-white">v{overview.published_version?.version_number || 1}</p>
-            <p className="text-[11px] text-purple-400 mt-1">
-              {overview.draft_version ? `Draft v${overview.draft_version.version_number} in progress` : 'All versions published'}
+            <p className="text-2xl font-black text-stroom-deep font-display">
+              {overview.draft_version ? `v${overview.draft_version.version_number} (Draft)` : 'No Draft'}
+            </p>
+            <p className="text-[11px] text-stroom-charcoal/60 mt-1">
+              {overview.draft_version ? 'Ready to edit' : 'Current version live'}
             </p>
           </div>
         </div>
       )}
 
-      {/* Main Content: Split Screen or Single Column */}
+      {/* Main CMS Layout */}
       <div className={`grid gap-8 ${previewMode ? 'grid-cols-1 lg:grid-cols-12' : 'grid-cols-1'}`}>
-        {/* Left Column: Management CMS */}
-        <div className={previewMode ? 'lg:col-span-7 space-y-6' : 'space-y-6'}>
-          {/* Version Selector Tabs */}
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/10 flex flex-wrap items-center justify-between gap-3 shadow-md">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-2">Version:</span>
-              {quizzes[0]?.versions?.map((ver: any) => (
-                <button
-                  key={ver.id}
-                  onClick={() => handleSelectVersion(ver.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-                    selectedVersionId === ver.id
-                      ? 'bg-indigo-600 text-white shadow-md'
-                      : 'bg-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <span>v{ver.version_number}</span>
+        
+        {/* Left Side: Version Selector & Questions Editor */}
+        <div className={previewMode ? 'lg:col-span-7' : 'w-full'}>
+          {/* Version Switcher Tabs */}
+          <div className="bg-white rounded-3xl p-6 border border-stroom-borderLight shadow-xs mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stroom-cream">
+              <div>
+                <h3 className="text-sm font-black text-stroom-black uppercase tracking-wider">
+                  Version History & Release Management
+                </h3>
+                <p className="text-xs text-stroom-charcoal/70 mt-0.5">
+                  Select a version to inspect questions or modify the active draft.
+                </p>
+              </div>
+
+              {/* Version Pills */}
+              <div className="flex flex-wrap items-center gap-2">
+                {quizzes[0]?.versions?.map((ver: any) => {
+                  const isSelected = selectedVersionId === ver.id;
+                  return (
+                    <button
+                      key={ver.id}
+                      onClick={() => handleSelectVersion(ver.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                        isSelected
+                          ? ver.publication_status === 'draft'
+                            ? 'bg-stroom-deep text-white shadow-brand'
+                            : 'bg-stroom-orange text-white shadow-brand'
+                          : ver.publication_status === 'draft'
+                          ? 'bg-stroom-cream text-stroom-deep border border-stroom-orange/30'
+                          : 'bg-stone-100 text-stroom-charcoal hover:bg-stroom-cream'
+                      }`}
+                    >
+                      <span>v{ver.version_number}</span>
+                      <span className="text-[10px] uppercase opacity-85">
+                        ({ver.publication_status})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Version Metadata Details */}
+            {activeVersion && (
+              <div className="pt-4 flex flex-wrap items-center justify-between gap-4 text-xs font-semibold text-stroom-charcoal">
+                <div className="flex items-center gap-3">
                   <span
-                    className={`text-[9px] uppercase px-1.5 py-0.2 rounded-md ${
-                      ver.publication_status === 'published'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : ver.publication_status === 'draft'
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'bg-slate-700 text-slate-400'
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      activeVersion.publication_status === 'published'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : activeVersion.publication_status === 'draft'
+                        ? 'bg-stroom-cream text-stroom-deep border border-stroom-orange/30'
+                        : 'bg-stone-200 text-stone-700'
                     }`}
                   >
-                    {ver.publication_status}
+                    Status: {activeVersion.publication_status}
                   </span>
-                </button>
-              ))}
-            </div>
+                  <span>Version #{activeVersion.version_number}</span>
+                  <span>•</span>
+                  <span>Created by {activeVersion.created_by || 'Admin'}</span>
+                </div>
 
-            <div className="flex items-center gap-2">
-              {isDraft ? (
-                <button
-                  onClick={handleOpenAddQuestion}
-                  className="py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Question</span>
-                </button>
-              ) : (
-                <span className="text-xs text-slate-500 italic">
-                  Published versions are immutable. Create a draft to edit.
-                </span>
-              )}
-            </div>
+                {isDraft && (
+                  <button
+                    onClick={handleOpenAddQuestion}
+                    className="px-4 py-2 rounded-xl bg-stroom-orange hover:bg-stroom-deep text-white text-xs font-black shadow-brand flex items-center gap-1.5 transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Question to Draft</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Questions List */}
+          {/* Question List */}
           {isLoading ? (
             <div className="py-20 text-center">
-              <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-              <p className="text-xs text-slate-400">Loading version questions...</p>
+              <div className="w-8 h-8 border-3 border-stroom-orange border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              <p className="text-xs font-bold text-stroom-charcoal">Loading quiz configuration...</p>
             </div>
           ) : !activeVersion || !activeVersion.questions || activeVersion.questions.length === 0 ? (
-            <div className="py-16 text-center rounded-3xl border border-slate-800 bg-slate-900/40 p-6">
-              <p className="text-sm font-semibold text-slate-300">No questions in this version</p>
+            <div className="p-12 text-center rounded-3xl bg-white border border-stroom-borderLight">
+              <HelpCircle className="w-12 h-12 text-stone-300 mx-auto mb-3" />
+              <h4 className="text-base font-black text-stroom-black">No questions in this version</h4>
+              <p className="text-xs text-stroom-charcoal/70 mt-1 max-w-sm mx-auto">
+                {isDraft
+                  ? 'Get started by creating the first question for this onboarding quiz.'
+                  : 'This version has no questions configured.'}
+              </p>
               {isDraft && (
                 <button
                   onClick={handleOpenAddQuestion}
-                  className="mt-3 py-2 px-4 rounded-xl bg-indigo-600 text-white text-xs font-bold"
+                  className="mt-4 px-4 py-2 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand"
                 >
-                  Add your first question
+                  Create First Question
                 </button>
               )}
             </div>
           ) : (
             <div className="space-y-4">
-              {activeVersion.questions.map((q, qIndex) => (
+              {activeVersion.questions.map((q, idx) => (
                 <div
                   key={q.id}
-                  className={`rounded-3xl border p-5 transition-all shadow-lg ${
-                    q.is_active ? 'bg-slate-900/80 border-white/10' : 'bg-slate-950/60 border-slate-800 opacity-60'
-                  }`}
+                  className="bg-white rounded-3xl p-5 border border-stroom-borderLight shadow-xs hover:border-stroom-orange/30 transition-all"
                 >
-                  {/* Question Header & Controls */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="w-7 h-7 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs">
-                        {qIndex + 1}
-                      </span>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="w-8 h-8 rounded-xl bg-stroom-cream text-stroom-deep font-black text-xs flex items-center justify-center shrink-0">
+                        {idx + 1}
+                      </div>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-base font-bold text-white">{q.question_text}</h3>
-                          <span
-                            className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                              q.question_type === 'single'
-                                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
-                                : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
-                            }`}
-                          >
-                            {q.question_type === 'single' ? 'Single' : `Multi (Max ${q.max_selections})`}
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-stroom-cream text-stroom-deep">
+                            {q.question_type === 'single' ? 'Single Choice' : `Multiple (Max ${q.max_selections})`}
                           </span>
                           {q.is_required ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                            <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
                               Required
                             </span>
                           ) : (
-                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-400">
+                            <span className="text-[10px] font-bold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
                               Optional
                             </span>
                           )}
                         </div>
+                        <h4 className="text-sm font-black text-stroom-black leading-snug">
+                          {q.question_text}
+                        </h4>
                         {q.description && (
-                          <p className="text-xs text-slate-400 mt-1">{q.description}</p>
+                          <p className="text-xs text-stroom-charcoal/70 mt-0.5">
+                            {q.description}
+                          </p>
                         )}
                       </div>
                     </div>
 
-                    {/* Action buttons (only if draft) */}
+                    {/* Actions for Question */}
                     {isDraft && (
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex items-center gap-1">
                         <button
-                          onClick={() => handleMoveQuestion(qIndex, 'up')}
-                          disabled={qIndex === 0}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30"
-                          title="Move Up"
+                          onClick={() => handleMoveQuestion(idx, 'up')}
+                          disabled={idx === 0}
+                          className="p-1.5 rounded-lg hover:bg-stone-100 disabled:opacity-30 text-stone-600"
+                          title="Move up"
                         >
                           <ArrowUp className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleMoveQuestion(qIndex, 'down')}
-                          disabled={qIndex === activeVersion.questions!.length - 1}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30"
-                          title="Move Down"
+                          onClick={() => handleMoveQuestion(idx, 'down')}
+                          disabled={idx === (activeVersion.questions?.length ?? 0) - 1}
+                          className="p-1.5 rounded-lg hover:bg-stone-100 disabled:opacity-30 text-stone-600"
+                          title="Move down"
                         >
                           <ArrowDown className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleOpenEditQuestion(q)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300"
-                          title="Edit Question"
+                          className="p-1.5 rounded-lg hover:bg-stroom-cream text-stroom-deep"
+                          title="Edit question"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteQuestion(q.id)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/40 text-rose-400"
-                          title="Delete Question"
+                          className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600"
+                          title="Delete question"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -529,15 +575,15 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   {/* Options List */}
-                  <div className="mt-3 pt-3 border-t border-slate-800/80">
+                  <div className="mt-4 pt-3 border-t border-stroom-cream">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        Options ({q.options.length})
+                      <span className="text-[11px] font-black uppercase tracking-wider text-stroom-charcoal/70">
+                        Response Options ({q.options?.length || 0})
                       </span>
                       {isDraft && (
                         <button
                           onClick={() => handleOpenAddOption(q.id)}
-                          className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                          className="text-[11px] font-black text-stroom-orange hover:underline flex items-center gap-1"
                         >
                           <Plus className="w-3 h-3" />
                           <span>Add Option</span>
@@ -546,22 +592,23 @@ export const AdminDashboard: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {q.options.map((opt) => (
+                      {q.options?.map((opt) => (
                         <div
                           key={opt.id}
-                          className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800 flex items-center justify-between gap-2"
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-xs font-semibold"
                         >
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-slate-200 truncate">{opt.label}</p>
-                            <p className="text-[10px] text-slate-500 font-mono">#{opt.stable_value}</p>
+                          <div className="truncate mr-2">
+                            <span className="text-stroom-black">{opt.label}</span>
+                            <span className="text-[10px] text-stroom-charcoal/50 block truncate font-mono">
+                              #{opt.stable_value}
+                            </span>
                           </div>
                           {isDraft && (
                             <button
                               onClick={() => handleDeleteOption(opt.id)}
-                              className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
-                              title="Delete option"
+                              className="text-stone-400 hover:text-rose-600 p-1 shrink-0"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <X className="w-3 h-3" />
                             </button>
                           )}
                         </div>
@@ -574,127 +621,166 @@ export const AdminDashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Right Column: Live Smartphone Preview (Interactive!) */}
-        {previewMode && activeVersion?.questions && (
-          <div className="lg:col-span-5 sticky top-6">
-            <div className="w-full max-w-sm mx-auto p-4 rounded-[42px] bg-slate-900 border-4 border-slate-800 shadow-2xl relative">
-              {/* Smartphone Camera Notch */}
-              <div className="w-32 h-4 bg-slate-950 rounded-full mx-auto mb-4 border border-white/5" />
+        {/* Right Side: Interactive Mobile Preview Bezel */}
+        {previewMode && (
+          <div className="lg:col-span-5 flex flex-col items-center">
+            <div className="sticky top-24 w-full max-w-sm">
+              <div className="bg-stroom-black rounded-[42px] p-3 shadow-2xl border-4 border-stroom-charcoal relative">
+                {/* Speaker pill */}
+                <div className="w-24 h-4 bg-stroom-cardDark rounded-full mx-auto mb-2" />
 
-              <div className="bg-slate-950 rounded-[32px] p-4 min-h-[580px] flex flex-col justify-between border border-white/5 overflow-hidden">
-                {activeVersion.questions.length === 0 ? (
-                  <div className="py-24 text-center text-xs text-slate-500">
-                    Add questions to preview quiz flow.
-                  </div>
-                ) : (
-                  <>
+                {/* Device Screen */}
+                <div className="bg-stroom-ivory rounded-[34px] p-5 min-h-[580px] flex flex-col justify-between overflow-hidden relative">
+                  {activeVersion?.questions && activeVersion.questions.length > 0 ? (
                     <div>
-                      {/* Interactive Progress */}
-                      <QuizProgress
-                        currentStep={previewIndex}
-                        totalSteps={activeVersion.questions.length}
-                        onSkip={() => alert('Skip triggered in mobile preview')}
-                      />
+                      {/* Mini Progress Bar */}
+                      <div className="flex items-center justify-between text-[10px] font-black text-stroom-charcoal mb-2">
+                        <span>QUESTION {previewIndex + 1} OF {activeVersion.questions.length}</span>
+                        <span>{Math.round(((previewIndex + 1) / activeVersion.questions.length) * 100)}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-stroom-cream rounded-full overflow-hidden mb-6">
+                        <div
+                          className="h-full bg-stroom-orange transition-all duration-300"
+                          style={{
+                            width: `${((previewIndex + 1) / activeVersion.questions.length) * 100}%`,
+                          }}
+                        />
+                      </div>
 
-                      {/* Interactive Question */}
-                      {activeVersion.questions[previewIndex] && (
-                        <>
-                          <QuizQuestionComp question={activeVersion.questions[previewIndex]} />
+                      {/* Current Preview Question */}
+                      {(() => {
+                        const curQ = activeVersion.questions[previewIndex];
+                        if (!curQ) return null;
+                        const isSingle = curQ.question_type === 'single';
+                        const selectedAnswers = previewAnswers[curQ.id] || [];
 
-                          {/* Options */}
-                          <div className="space-y-2 mt-3">
-                            {activeVersion.questions[previewIndex].options.map((opt) => {
-                              const qId = activeVersion.questions![previewIndex].id;
-                              const isSingle = activeVersion.questions![previewIndex].question_type === 'single';
-                              const isSelected = (previewAnswers[qId] || []).includes(opt.id);
+                        return (
+                          <div>
+                            <h3 className="text-base font-black text-stroom-black leading-snug">
+                              {curQ.question_text}
+                            </h3>
+                            {curQ.description && (
+                              <p className="text-xs text-stroom-charcoal/70 mt-1 mb-4">
+                                {curQ.description}
+                              </p>
+                            )}
 
-                              return (
-                                <QuizOptionCard
-                                  key={opt.id}
-                                  option={opt}
-                                  isSelected={isSelected}
-                                  onSelect={() => handlePreviewToggleOption(qId, opt.id, isSingle)}
-                                />
-                              );
-                            })}
+                            {/* Options */}
+                            <div className="space-y-2 mt-4 max-h-[340px] overflow-y-auto pr-1">
+                              {curQ.options?.map((opt) => {
+                                const isChecked = selectedAnswers.includes(opt.id);
+                                return (
+                                  <div
+                                    key={opt.id}
+                                    onClick={() => handlePreviewToggleOption(curQ.id, opt.id, isSingle)}
+                                    className={`p-3 rounded-2xl border text-xs font-extrabold cursor-pointer transition-all flex items-center justify-between ${
+                                      isChecked
+                                        ? 'bg-stroom-orange text-white border-stroom-orange shadow-brand'
+                                        : 'bg-white text-stroom-black border-stroom-borderLight hover:bg-stroom-cream'
+                                    }`}
+                                  >
+                                    <span>{opt.label}</span>
+                                    {isChecked && <Check className="w-4 h-4" />}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </>
-                      )}
+                        );
+                      })()}
                     </div>
+                  ) : (
+                    <div className="py-20 text-center">
+                      <p className="text-xs font-bold text-stroom-charcoal">No questions to preview</p>
+                    </div>
+                  )}
 
-                    {/* Preview Navigation */}
-                    <QuizNavigation
-                      onBack={() => setPreviewIndex((prev) => Math.max(0, prev - 1))}
-                      onNext={() => {
-                        if (previewIndex < activeVersion.questions!.length - 1) {
-                          setPreviewIndex((prev) => prev + 1);
-                        } else {
-                          alert('Quiz completed in mobile preview! Preferences will be mapped.');
-                          setPreviewIndex(0);
-                        }
-                      }}
-                      canGoBack={previewIndex > 0}
-                      isLastQuestion={previewIndex === activeVersion.questions.length - 1}
-                      isValid={true}
-                    />
-                  </>
-                )}
+                  {/* Device Bottom Controls */}
+                  <div className="pt-4 border-t border-stroom-cream flex items-center justify-between">
+                    <button
+                      onClick={() => setPreviewIndex((prev) => Math.max(0, prev - 1))}
+                      disabled={previewIndex === 0}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-stroom-borderLight text-xs font-bold disabled:opacity-40"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={() =>
+                        setPreviewIndex((prev) =>
+                          Math.min((activeVersion?.questions?.length || 1) - 1, prev + 1)
+                        )
+                      }
+                      disabled={previewIndex >= (activeVersion?.questions?.length || 1) - 1}
+                      className="px-4 py-1.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+
+                {/* Home Indicator line */}
+                <div className="w-32 h-1 bg-stone-600 rounded-full mx-auto mt-2.5" />
               </div>
+              <p className="text-[11px] font-bold text-stroom-charcoal/70 text-center mt-3">
+                Live Interactive Simulation (Version {activeVersion?.version_number})
+              </p>
             </div>
-            <p className="text-center text-xs text-slate-500 mt-3">
-              Interactive Live Preview of Version {activeVersion.version_number}
-            </p>
           </div>
         )}
+
       </div>
 
-      {/* Edit/Add Question Modal */}
+      {/* Add / Edit Question Modal */}
       {editingQuestion && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-slide-up">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-white">
-                {isNewQuestion ? 'Add Question to Draft' : 'Edit Question'}
-              </h3>
-              <button
-                onClick={() => setEditingQuestion(null)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stroom-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 border border-stroom-borderLight shadow-2xl relative">
+            <h3 className="text-base font-black text-stroom-black font-display">
+              {isNewQuestion ? 'Add Question to Draft' : 'Edit Question'}
+            </h3>
 
-            <form onSubmit={handleSaveQuestion} className="space-y-4">
+            <form onSubmit={handleSaveQuestion} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Question Text</label>
+                <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                  Question Text
+                </label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. Which IPL squad would you franchise first?"
                   value={questionFormData.question_text}
-                  onChange={(e) => setQuestionFormData({ ...questionFormData, question_text: e.target.value })}
-                  placeholder="e.g. What's your focus right now?"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  onChange={(e) =>
+                    setQuestionFormData({ ...questionFormData, question_text: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 rounded-xl border border-stroom-borderLight focus:border-stroom-orange text-xs font-semibold outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Description (Optional)</label>
+                <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                  Description / Helper Note
+                </label>
                 <input
                   type="text"
+                  placeholder="e.g. Select the team vibe you resonate with most"
                   value={questionFormData.description}
-                  onChange={(e) => setQuestionFormData({ ...questionFormData, description: e.target.value })}
-                  placeholder="e.g. Select up to 3 options."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  onChange={(e) =>
+                    setQuestionFormData({ ...questionFormData, description: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 rounded-xl border border-stroom-borderLight focus:border-stroom-orange text-xs font-semibold outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">Question Type</label>
+                  <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                    Choice Type
+                  </label>
                   <select
                     value={questionFormData.question_type}
-                    onChange={(e) => setQuestionFormData({ ...questionFormData, question_type: e.target.value })}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                    onChange={(e) =>
+                      setQuestionFormData({ ...questionFormData, question_type: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-stroom-borderLight text-xs font-semibold outline-none"
                   >
                     <option value="single">Single Choice</option>
                     <option value="multiple">Multiple Choice</option>
@@ -702,11 +788,15 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">Requirement</label>
+                  <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                    Requirement
+                  </label>
                   <select
                     value={questionFormData.is_required}
-                    onChange={(e) => setQuestionFormData({ ...questionFormData, is_required: Number(e.target.value) })}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                    onChange={(e) =>
+                      setQuestionFormData({ ...questionFormData, is_required: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-stroom-borderLight text-xs font-semibold outline-none"
                   >
                     <option value={1}>Required</option>
                     <option value={0}>Optional</option>
@@ -717,43 +807,55 @@ export const AdminDashboard: React.FC = () => {
               {questionFormData.question_type === 'multiple' && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Min Selections</label>
+                    <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                      Min Selections
+                    </label>
                     <input
                       type="number"
                       min={1}
-                      max={10}
                       value={questionFormData.min_selections}
-                      onChange={(e) => setQuestionFormData({ ...questionFormData, min_selections: Number(e.target.value) })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                      onChange={(e) =>
+                        setQuestionFormData({
+                          ...questionFormData,
+                          min_selections: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-4 py-2 rounded-xl border border-stroom-borderLight text-xs font-semibold outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Max Selections</label>
+                    <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                      Max Selections
+                    </label>
                     <input
                       type="number"
                       min={1}
-                      max={10}
                       value={questionFormData.max_selections}
-                      onChange={(e) => setQuestionFormData({ ...questionFormData, max_selections: Number(e.target.value) })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                      onChange={(e) =>
+                        setQuestionFormData({
+                          ...questionFormData,
+                          max_selections: Number(e.target.value),
+                        })
+                      }
+                      className="w-full px-4 py-2 rounded-xl border border-stroom-borderLight text-xs font-semibold outline-none"
                     />
                   </div>
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-stroom-orange text-white font-black text-xs shadow-brand hover:brightness-105"
+                >
+                  Save Question
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditingQuestion(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+                  className="px-4 py-2.5 rounded-xl bg-stone-100 text-stone-700 font-bold text-xs"
                 >
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
-                >
-                  Save Question
                 </button>
               </div>
             </form>
@@ -763,65 +865,57 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Add Option Modal */}
       {editingOptionQuestionId && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-slide-up">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-white">Add Option</h3>
-              <button
-                onClick={() => setEditingOptionQuestionId(null)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stroom-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 border border-stroom-borderLight shadow-2xl relative">
+            <h3 className="text-base font-black text-stroom-black font-display">
+              Add Response Option
+            </h3>
 
-            <form onSubmit={handleSaveOption} className="space-y-4">
+            <form onSubmit={handleSaveOption} className="mt-4 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">Option Display Label</label>
-                <input
-                  type="text"
-                  required
-                  value={optionFormData.label}
-                  onChange={(e) => {
-                    const label = e.target.value;
-                    const autoStable = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40);
-                    setOptionFormData({ label, stable_value: autoStable });
-                  }}
-                  placeholder="e.g. Travel and adventures"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  Stable Value (Preference Tag Key)
+                <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                  Option Label
                 </label>
                 <input
                   type="text"
                   required
-                  value={optionFormData.stable_value}
-                  onChange={(e) => setOptionFormData({ ...optionFormData, stable_value: e.target.value })}
-                  placeholder="e.g. travel_adventure"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white font-mono"
+                  placeholder="e.g. Hyderabad Deccan Chargers"
+                  value={optionFormData.label}
+                  onChange={(e) =>
+                    setOptionFormData({ ...optionFormData, label: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 rounded-xl border border-stroom-borderLight focus:border-stroom-orange text-xs font-semibold outline-none"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Used to map user preferences and filter personalized discovery feeds.
-                </p>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <div>
+                <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">
+                  Vibe Tag / Stable Value (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. hyderabad_chargers"
+                  value={optionFormData.stable_value}
+                  onChange={(e) =>
+                    setOptionFormData({ ...optionFormData, stable_value: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 rounded-xl border border-stroom-borderLight focus:border-stroom-orange text-xs font-mono text-xs outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-stroom-orange text-white font-black text-xs shadow-brand hover:brightness-105"
+                >
+                  Add Option
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditingOptionQuestionId(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+                  className="px-4 py-2.5 rounded-xl bg-stone-100 text-stone-700 font-bold text-xs"
                 >
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
-                >
-                  Add Option
                 </button>
               </div>
             </form>
@@ -829,67 +923,53 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Publish Confirmation Modal */}
+      {/* Publish Version Confirmation Modal */}
       {showPublishModal && activeVersion && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-slide-up text-left">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-4">
-              <Send className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stroom-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 border border-stroom-orange/30 shadow-2xl relative">
+            <div className="w-12 h-12 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mb-3">
+              <Send className="w-6 h-6 text-stroom-orange" />
             </div>
-
-            <h3 className="text-lg font-bold text-white mb-2">
+            <h3 className="text-lg font-black text-stroom-black font-display">
               Publish Quiz Version {activeVersion.version_number}?
             </h3>
-
-            <p className="text-xs text-slate-300 leading-relaxed mb-4">
-              Publishing will make this version immediately active for all new onboarding users. Existing user sessions and historical responses will remain preserved against their previous versions.
+            <p className="text-xs text-stroom-charcoal/80 mt-2 leading-relaxed">
+              Publishing will make this version the active onboarding quiz for all incoming members.
+              The previous published version will be safely archived. This draft will become immutable.
             </p>
 
-            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs space-y-1.5 mb-5">
-              <div className="flex items-center justify-between text-slate-400">
+            <div className="mt-4 p-3 rounded-2xl bg-stroom-ivory border border-stroom-borderLight text-xs space-y-1 font-semibold text-stroom-charcoal">
+              <div className="flex items-center justify-between">
                 <span>Active Questions:</span>
-                <span className="font-bold text-white">{activeVersion.questions?.length || 0}</span>
+                <span className="font-black text-stroom-black">{activeVersion.questions?.length || 0}</span>
               </div>
-              <div className="flex items-center justify-between text-slate-400">
-                <span>Total Options:</span>
-                <span className="font-bold text-white">
-                  {activeVersion.questions?.reduce((acc, q) => acc + q.options.length, 0) || 0}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-slate-400">
-                <span>Versioning:</span>
-                <span className="font-bold text-emerald-400">Immutable Snapshot</span>
+              <div className="flex items-center justify-between">
+                <span>Created by:</span>
+                <span className="font-black text-stroom-black">{activeVersion.created_by || 'Admin'}</span>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex items-center gap-2 pt-4">
               <button
                 type="button"
-                onClick={() => setShowPublishModal(false)}
                 disabled={isPublishing}
-                className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+                onClick={handlePublish}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-black text-xs shadow-brand hover:brightness-105 disabled:opacity-50"
               >
-                Cancel
+                {isPublishing ? 'Publishing...' : 'Confirm & Publish Live'}
               </button>
               <button
                 type="button"
-                onClick={handlePublish}
-                disabled={isPublishing}
-                className="px-5 py-2.5 rounded-xl vibe-gradient-bg text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25"
+                onClick={() => setShowPublishModal(false)}
+                className="px-4 py-2.5 rounded-xl bg-stone-100 text-stone-700 font-bold text-xs"
               >
-                {isPublishing ? (
-                  <span>Publishing...</span>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4 stroke-[3]" />
-                    <span>Confirm & Publish</span>
-                  </>
-                )}
+                Cancel
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 };
