@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     region: ohio # AWS us-east-2 (co-located with Neon US East for minimal database latency)
-    buildCommand: npm install --include=dev && npm run build:server
+    buildCommand: npm ci --include=dev && npm run build:server
     startCommand: node dist/server/index.js
     healthCheckPath: /api/health
     autoDeploy: true
