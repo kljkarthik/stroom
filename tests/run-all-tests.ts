@@ -116,6 +116,29 @@ async function runTests() {
     assert(data.published_version !== undefined, 'Published version must exist');
   });
 
+  await test('Empty-password account cannot authenticate with arbitrary credentials (401)', async () => {
+    const { status, data } = await apiRequest('/auth/login', {
+      method: 'POST',
+      body: { email: 'karan@stroom.club', password: 'AttemptedPassword123!' },
+    });
+    assert(status === 401, `Expected 401 for empty-password account login attempt, got ${status}`);
+    assert(data.error === 'Invalid email or password', 'Must return standard invalid credential error');
+  });
+
+  await test('Empty-password login payload is rejected with 400 validation error', async () => {
+    const { status, data } = await apiRequest('/auth/login', {
+      method: 'POST',
+      body: { email: 'karan@stroom.club', password: '' },
+    });
+    assert(status === 400, `Expected 400 for empty password string, got ${status}`);
+    assert(data.error === 'Password is required', 'Must reject empty password string');
+  });
+
+  await test('Unauthenticated request to protected member endpoint /auth/me is rejected with 401', async () => {
+    const { status } = await apiRequest('/auth/me');
+    assert(status === 401, `Expected 401, got ${status}`);
+  });
+
   // --- SUITE 2: DYNAMIC ONBOARDING QUIZ & SESSION PERSISTENCE ---
   console.log('\n--- SUITE 2: DYNAMIC ONBOARDING QUIZ & SESSION PERSISTENCE ---');
 

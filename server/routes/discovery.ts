@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { optionalAuth, AuthRequest } from '../middleware/auth';
 import { DiscoveryItem } from '../types';
 
@@ -7,9 +7,10 @@ const router = Router();
 
 // GET /api/discovery
 // Returns personalized discovery items if user is authenticated with vibe tags, or general popular items
-router.get('/', optionalAuth, (req: AuthRequest, res: Response) => {
+router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { type, search } = req.query;
+    const adapter = getDatabaseAdapter();
 
     let query = 'SELECT * FROM discovery_items';
     const params: any[] = [];
@@ -30,7 +31,7 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    const rawItems = db.prepare(query).all(...params) as any[];
+    const rawItems = await adapter.query(query, params);
 
     // Parse tags JSON
     const items: DiscoveryItem[] = rawItems.map(item => ({
@@ -43,9 +44,9 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response) => {
     let isPersonalized = false;
 
     if (req.user) {
-      const prefs = db.prepare(`
+      const prefs = await adapter.query<{ preference_value: string }>(`
         SELECT preference_value FROM user_preferences WHERE user_id = ?
-      `).all(req.user.id) as { preference_value: string }[];
+      `, [req.user.id]);
       userTags = prefs.map(p => p.preference_value);
       isPersonalized = userTags.length > 0;
     }

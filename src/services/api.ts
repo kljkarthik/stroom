@@ -1,6 +1,6 @@
 import { QuizData, QuizSession, User, DiscoveryItem, UserPreference, QuizVersion } from '../types';
 
-const API_BASE = '/api';
+export const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '') + '/api';
 
 class ApiError extends Error {
   status: number;
@@ -16,7 +16,7 @@ class ApiError extends Error {
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('stroom_token');
-  
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),

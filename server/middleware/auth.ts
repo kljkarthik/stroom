@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { User } from '../types';
 import { AdminPermission, hasPermission, hasAnyAdminAccess } from '../services/rbacService';
 import { config } from '../config/env';
@@ -19,7 +19,7 @@ export function generateToken(user: { id: string; email: string; role: string })
   );
 }
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required. Please provide a valid Bearer token.' });
@@ -28,9 +28,11 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   const token = authHeader.split(' ')[1];
   try {
     const payload = jwt.verify(token, JWT_SECRET) as { id: string; email: string; role: string };
-    const user = db.prepare(
-      'SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?'
-    ).get(payload.id) as (User & { account_status?: string }) | undefined;
+    const adapter = getDatabaseAdapter();
+    const user = await adapter.queryOne<User & { account_status?: string }>(
+      'SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?',
+      [payload.id]
+    );
 
     if (!user) {
       return res.status(401).json({ error: 'User not found or session expired.' });
@@ -73,15 +75,17 @@ export function requirePermission(permission: AdminPermission) {
   };
 }
 
-export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
+export async function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
     try {
       const payload = jwt.verify(token, JWT_SECRET) as { id: string; email: string; role: string };
-      const user = db.prepare(
-        'SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?'
-      ).get(payload.id) as (User & { account_status?: string }) | undefined;
+      const adapter = getDatabaseAdapter();
+      const user = await adapter.queryOne<User & { account_status?: string }>(
+        'SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?',
+        [payload.id]
+      );
       if (user && user.account_status !== 'suspended') {
         req.user = user;
       }

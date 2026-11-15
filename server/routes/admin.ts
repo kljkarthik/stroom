@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { requireAuth, requireAdmin, requirePermission, AuthRequest } from '../middleware/auth';
 import { QuizQuestion, QuizOption, QuizVersion } from '../types';
 import adminHubRouter from './adminHub';
@@ -17,42 +17,43 @@ router.use('/', adminHubRouter);
 
 // 1. GET /api/admin/overview
 // Quiz statistics, completion rates, and version status
-router.get('/overview', requirePermission('overview.view'), (req: AuthRequest, res: Response) => {
+router.get('/overview', requirePermission('overview.view'), async (req: AuthRequest, res: Response) => {
   try {
-    const totalSessions = db.prepare('SELECT count(*) as count FROM quiz_sessions').get() as { count: number };
-    const completedSessions = db.prepare("SELECT count(*) as count FROM quiz_sessions WHERE status = 'COMPLETED'").get() as { count: number };
-    const skippedSessions = db.prepare("SELECT count(*) as count FROM quiz_sessions WHERE status = 'SKIPPED'").get() as { count: number };
-    const inProgressSessions = db.prepare("SELECT count(*) as count FROM quiz_sessions WHERE status = 'IN_PROGRESS'").get() as { count: number };
-    const totalUsers = db.prepare('SELECT count(*) as count FROM users').get() as { count: number };
+    const adapter = getDatabaseAdapter();
+    const totalSessions = (await adapter.queryOne<{ count: number }>('SELECT count(*) as count FROM quiz_sessions')) || { count: 0 };
+    const completedSessions = (await adapter.queryOne<{ count: number }>("SELECT count(*) as count FROM quiz_sessions WHERE status = 'COMPLETED'")) || { count: 0 };
+    const skippedSessions = (await adapter.queryOne<{ count: number }>("SELECT count(*) as count FROM quiz_sessions WHERE status = 'SKIPPED'")) || { count: 0 };
+    const inProgressSessions = (await adapter.queryOne<{ count: number }>("SELECT count(*) as count FROM quiz_sessions WHERE status = 'IN_PROGRESS'")) || { count: 0 };
+    const totalUsers = (await adapter.queryOne<{ count: number }>('SELECT count(*) as count FROM users')) || { count: 0 };
 
-    const completionRate = totalSessions.count > 0 
-      ? Math.round((completedSessions.count / totalSessions.count) * 100) 
+    const completionRate = totalSessions.count > 0
+      ? Math.round((completedSessions.count / totalSessions.count) * 100)
       : 0;
-    const skipRate = totalSessions.count > 0 
-      ? Math.round((skippedSessions.count / totalSessions.count) * 100) 
+    const skipRate = totalSessions.count > 0
+      ? Math.round((skippedSessions.count / totalSessions.count) * 100)
       : 0;
 
     // Active published version
-    const publishedVersion = db.prepare(`
+    const publishedVersion = await adapter.queryOne<any>(`
       SELECT qv.id, qv.version_number, qv.published_at, count(q.id) as question_count
       FROM quiz_versions qv
       LEFT JOIN questions q ON q.quiz_version_id = qv.id AND q.is_active = 1
       WHERE qv.publication_status = 'published'
-      GROUP BY qv.id
+      GROUP BY qv.id, qv.version_number, qv.published_at
       ORDER BY qv.version_number DESC
       LIMIT 1
-    `).get();
+    `);
 
     // Draft version (if any)
-    const draftVersion = db.prepare(`
+    const draftVersion = await adapter.queryOne<any>(`
       SELECT qv.id, qv.version_number, qv.created_at, count(q.id) as question_count
       FROM quiz_versions qv
       LEFT JOIN questions q ON q.quiz_version_id = qv.id
       WHERE qv.publication_status = 'draft'
-      GROUP BY qv.id
+      GROUP BY qv.id, qv.version_number, qv.created_at
       ORDER BY qv.version_number DESC
       LIMIT 1
-    `).get();
+    `);
 
     return res.json({
       stats: {
@@ -75,20 +76,21 @@ router.get('/overview', requirePermission('overview.view'), (req: AuthRequest, r
 
 // 2. GET /api/admin/quizzes
 // Lists quizzes and their version history
-router.get('/quizzes', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+router.get('/quizzes', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
-    const quizzes = db.prepare('SELECT * FROM quizzes ORDER BY created_at DESC').all() as any[];
+    const adapter = getDatabaseAdapter();
+    const quizzes = await adapter.query<any>('SELECT * FROM quizzes ORDER BY created_at DESC');
 
     for (const quiz of quizzes) {
-      quiz.versions = db.prepare(`
-        SELECT qv.*, 
+      quiz.versions = await adapter.query<any>(`
+        SELECT qv.*,
           (SELECT count(*) FROM questions WHERE quiz_version_id = qv.id) as total_questions,
           (SELECT count(*) FROM questions WHERE quiz_version_id = qv.id AND is_active = 1) as active_questions,
           (SELECT count(*) FROM quiz_sessions WHERE quiz_version_id = qv.id) as sessions_count
         FROM quiz_versions qv
         WHERE qv.quiz_id = ?
         ORDER BY qv.version_number DESC
-      `).all(quiz.id);
+      `, [quiz.id]);
     }
 
     return res.json({ quizzes });
@@ -98,100 +100,97 @@ router.get('/quizzes', requirePermission('quiz.manage'), (req: AuthRequest, res:
   }
 });
 
-// 3. GET /api/admin/versions/:versionId
-// Full question & options tree for a version
-router.get('/versions/:versionId', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+// 3. GET /api/admin/versions/:id
+// Gets full tree for a specific quiz version
+router.get('/versions/:id', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
-    const { versionId } = req.params;
-    const version = db.prepare(`
+    const adapter = getDatabaseAdapter();
+    const versionId = req.params.id;
+
+    const version = await adapter.queryOne<any>(`
       SELECT qv.*, q.title as quiz_title, q.description as quiz_description
       FROM quiz_versions qv
       JOIN quizzes q ON q.id = qv.quiz_id
       WHERE qv.id = ?
-    `).get(versionId) as any;
+    `, [versionId]);
 
     if (!version) {
       return res.status(404).json({ error: 'Version not found' });
     }
 
-    const questions = db.prepare(`
+    const questions = await adapter.query<QuizQuestion>(`
       SELECT * FROM questions
       WHERE quiz_version_id = ?
       ORDER BY display_order ASC
-    `).all(versionId) as QuizQuestion[];
+    `, [versionId]);
 
     for (const q of questions) {
-      q.options = db.prepare(`
+      q.options = await adapter.query<QuizOption>(`
         SELECT * FROM options
         WHERE question_id = ?
         ORDER BY display_order ASC
-      `).all(q.id) as QuizOption[];
+      `, [q.id]);
     }
 
     version.questions = questions;
 
     return res.json({ version });
   } catch (err: any) {
-    console.error('Error fetching version:', err);
+    console.error('Error fetching version tree:', err);
     return res.status(500).json({ error: 'Failed to fetch version tree' });
   }
 });
 
-// 4. POST /api/admin/quizzes/:quizId/create-draft
-// Clones active published version into a draft (or creates blank draft)
-router.post('/quizzes/:quizId/create-draft', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+// 4. POST /api/admin/quizzes/:quizId/versions
+// Clones active published version (or latest version) into a new editable 'draft' version
+router.post('/quizzes/:quizId/versions', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { quizId } = req.params;
 
-    // Check if a draft already exists for this quiz
-    const existingDraft = db.prepare(`
+    // Check if there is already an existing draft for this quiz
+    const existingDraft = await adapter.queryOne<any>(`
       SELECT id FROM quiz_versions WHERE quiz_id = ? AND publication_status = 'draft'
-    `).get(quizId) as { id: string } | undefined;
+    `, [quizId]);
 
     if (existingDraft) {
-      return res.json({
-        message: 'Draft already exists',
-        draft_version_id: existingDraft.id,
+      return res.status(409).json({
+        error: 'A draft version already exists. Edit or publish the existing draft before creating a new one.',
+        draft_id: existingDraft.id
       });
     }
 
-    // Find highest version number
-    const maxVer = db.prepare(`
-      SELECT coalesce(max(version_number), 0) as max_v FROM quiz_versions WHERE quiz_id = ?
-    `).get(quizId) as { max_v: number };
-
-    const newVersionNumber = maxVer.max_v + 1;
-    const newVersionId = 'qver_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    // Get max version number
+    const maxVer = (await adapter.queryOne<{ max_ver: number }>(`
+      SELECT coalesce(max(version_number), 0) as max_ver FROM quiz_versions WHERE quiz_id = ?
+    `, [quizId])) || { max_ver: 0 };
+    const newVersionNumber = maxVer.max_ver + 1;
+    const newVersionId = 'qv_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 
     // Latest published version to clone
-    const latestPublished = db.prepare(`
+    const latestPublished = await adapter.queryOne<{ id: string }>(`
       SELECT id FROM quiz_versions
       WHERE quiz_id = ? AND publication_status = 'published'
       ORDER BY version_number DESC
       LIMIT 1
-    `).get(quizId) as { id: string } | undefined;
+    `, [quizId]);
 
-    db.transaction(() => {
-      db.prepare(`
+    await adapter.transaction(async (tx) => {
+      await tx.execute(`
         INSERT INTO quiz_versions (id, quiz_id, version_number, publication_status, created_by)
         VALUES (?, ?, ?, 'draft', ?)
-      `).run(newVersionId, quizId, newVersionNumber, req.user?.full_name || req.user?.email || 'Administrator');
+      `, [newVersionId, quizId, newVersionNumber, req.user?.full_name || req.user?.email || 'Administrator']);
 
       if (latestPublished) {
         // Clone questions & options
-        const questions = db.prepare('SELECT * FROM questions WHERE quiz_version_id = ?').all(latestPublished.id) as any[];
-        const insertQ = db.prepare(`
-          INSERT INTO questions (id, quiz_version_id, question_text, description, question_type, is_required, min_selections, max_selections, display_order, is_active)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        const insertOpt = db.prepare(`
-          INSERT INTO options (id, question_id, label, stable_value, display_order, is_active)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `);
+        const questions = await tx.query<any>('SELECT * FROM questions WHERE quiz_version_id = ?', [latestPublished.id]);
 
         for (const q of questions) {
           const newQId = 'q_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-          insertQ.run(
+          await tx.execute(`
+            INSERT INTO questions (id, quiz_version_id, question_text, description, question_type, is_required, min_selections, max_selections, display_order, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
             newQId,
             newVersionId,
             q.question_text,
@@ -202,73 +201,72 @@ router.post('/quizzes/:quizId/create-draft', requirePermission('quiz.manage'), (
             q.max_selections,
             q.display_order,
             q.is_active
-          );
+          ]);
 
-          const options = db.prepare('SELECT * FROM options WHERE question_id = ?').all(q.id) as any[];
+          const options = await tx.query<any>('SELECT * FROM options WHERE question_id = ?', [q.id]);
           for (const opt of options) {
             const newOptId = 'opt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-            insertOpt.run(
-              newOptId,
-              newQId,
-              opt.label,
-              opt.stable_value,
-              opt.display_order,
-              opt.is_active
-            );
+            await tx.execute(`
+              INSERT INTO options (id, question_id, label, stable_value, display_order, is_active)
+              VALUES (?, ?, ?, ?, ?, ?)
+            `, [newOptId, newQId, opt.label, opt.stable_value, opt.display_order, opt.is_active]);
           }
         }
       }
-    })();
+    });
+
+    const created = await adapter.queryOne('SELECT * FROM quiz_versions WHERE id = ?', [newVersionId]);
 
     return res.status(201).json({
-      message: 'Draft version created successfully',
-      draft_version_id: newVersionId,
-      version_number: newVersionNumber,
+      message: `Draft version ${newVersionNumber} created successfully`,
+      version: created,
     });
   } catch (err: any) {
-    console.error('Error creating draft:', err);
-    return res.status(500).json({ error: 'Failed to create draft' });
+    console.error('Error creating draft version:', err);
+    return res.status(500).json({ error: 'Failed to create draft version' });
   }
 });
 
 // 5. POST /api/admin/questions
-// Adds a question to a draft version
-router.post('/questions', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+// Adds question to draft version
+router.post('/questions', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const {
       quiz_version_id,
       question_text,
-      description = '',
-      question_type = 'single',
-      is_required = 1,
-      min_selections = 1,
-      max_selections = 1,
-      options = []
+      description,
+      question_type,
+      is_required,
+      min_selections,
+      max_selections,
+      options
     } = req.body;
 
-    if (!quiz_version_id || !question_text) {
-      return res.status(400).json({ error: 'quiz_version_id and question_text are required' });
+    if (!quiz_version_id || !question_text || !question_type) {
+      return res.status(400).json({ error: 'quiz_version_id, question_text, and question_type are required' });
     }
 
-    // Verify version is in draft
-    const version = db.prepare('SELECT * FROM quiz_versions WHERE id = ?').get(quiz_version_id) as QuizVersion | undefined;
+    const version = await adapter.queryOne<any>('SELECT publication_status FROM quiz_versions WHERE id = ?', [quiz_version_id]);
     if (!version) {
       return res.status(404).json({ error: 'Quiz version not found' });
     }
     if (version.publication_status !== 'draft') {
-      return res.status(400).json({ error: 'Cannot modify a published or archived version. Create a new draft first.' });
+      return res.status(400).json({ error: 'Cannot add questions to a published or archived version. Create a draft first.' });
     }
 
     // Determine display order
-    const maxOrder = db.prepare('SELECT coalesce(max(display_order), 0) as max_ord FROM questions WHERE quiz_version_id = ?').get(quiz_version_id) as { max_ord: number };
+    const maxOrder = (await adapter.queryOne<{ max_ord: number }>(`
+      SELECT coalesce(max(display_order), 0) as max_ord FROM questions WHERE quiz_version_id = ?
+    `, [quiz_version_id])) || { max_ord: 0 };
     const display_order = maxOrder.max_ord + 1;
     const questionId = 'q_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 
-    db.transaction(() => {
-      db.prepare(`
+    await adapter.transaction(async (tx) => {
+      await tx.execute(`
         INSERT INTO questions (id, quiz_version_id, question_text, description, question_type, is_required, min_selections, max_selections, display_order, is_active)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-      `).run(
+      `, [
         questionId,
         quiz_version_id,
         question_text,
@@ -278,29 +276,28 @@ router.post('/questions', requirePermission('quiz.manage'), (req: AuthRequest, r
         Number(min_selections) || 1,
         question_type === 'single' ? 1 : (Number(max_selections) || 1),
         display_order
-      );
+      ]);
 
       // Add options if provided
       if (Array.isArray(options)) {
-        const insertOpt = db.prepare(`
-          INSERT INTO options (id, question_id, label, stable_value, display_order, is_active)
-          VALUES (?, ?, ?, ?, ?, 1)
-        `);
-
-        options.forEach((opt: any, idx: number) => {
+        for (let idx = 0; idx < options.length; idx++) {
+          const opt = options[idx];
           const optId = 'opt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
           const safeLabel = opt && opt.label ? String(opt.label).trim() : `Option ${idx + 1}`;
           const stableValue = (opt && opt.stable_value
             ? String(opt.stable_value)
             : safeLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_') || `opt_${idx + 1}`
           ).slice(0, 50);
-          insertOpt.run(optId, questionId, safeLabel, stableValue, idx + 1);
-        });
+          await tx.execute(`
+            INSERT INTO options (id, question_id, label, stable_value, display_order, is_active)
+            VALUES (?, ?, ?, ?, ?, 1)
+          `, [optId, questionId, safeLabel, stableValue, idx + 1]);
+        }
       }
-    })();
+    });
 
-    const createdQuestion = db.prepare('SELECT * FROM questions WHERE id = ?').get(questionId) as QuizQuestion;
-    createdQuestion.options = db.prepare('SELECT * FROM options WHERE question_id = ? ORDER BY display_order ASC').all(questionId) as QuizOption[];
+    const createdQuestion = await adapter.queryOne<any>('SELECT * FROM questions WHERE id = ?', [questionId]);
+    createdQuestion.options = await adapter.query<QuizOption>('SELECT * FROM options WHERE question_id = ? ORDER BY display_order ASC', [questionId]);
 
     return res.status(201).json({
       message: 'Question created successfully',
@@ -314,15 +311,16 @@ router.post('/questions', requirePermission('quiz.manage'), (req: AuthRequest, r
 
 // 6. PATCH /api/admin/questions/:id
 // Updates question in draft version
-router.patch('/questions/:id', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+router.patch('/questions/:id', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const questionId = req.params.id;
-    const question = db.prepare(`
+    const question = await adapter.queryOne<any>(`
       SELECT q.*, qv.publication_status
       FROM questions q
       JOIN quiz_versions qv ON qv.id = q.quiz_version_id
       WHERE q.id = ?
-    `).get(questionId) as any;
+    `, [questionId]);
 
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
@@ -357,11 +355,11 @@ router.patch('/questions/:id', requirePermission('quiz.manage'), (req: AuthReque
 
     if (updates.length > 0) {
       params.push(questionId);
-      db.prepare(`UPDATE questions SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+      await adapter.execute(`UPDATE questions SET ${updates.join(', ')} WHERE id = ?`, params);
     }
 
-    const updated = db.prepare('SELECT * FROM questions WHERE id = ?').get(questionId) as QuizQuestion;
-    updated.options = db.prepare('SELECT * FROM options WHERE question_id = ? ORDER BY display_order ASC').all(questionId) as QuizOption[];
+    const updated = await adapter.queryOne<any>('SELECT * FROM questions WHERE id = ?', [questionId]);
+    updated.options = await adapter.query<QuizOption>('SELECT * FROM options WHERE question_id = ? ORDER BY display_order ASC', [questionId]);
 
     return res.json({
       message: 'Question updated successfully',
@@ -375,15 +373,16 @@ router.patch('/questions/:id', requirePermission('quiz.manage'), (req: AuthReque
 
 // 7. DELETE /api/admin/questions/:id
 // Deletes question from draft
-router.delete('/questions/:id', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+router.delete('/questions/:id', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const questionId = req.params.id;
-    const question = db.prepare(`
+    const question = await adapter.queryOne<any>(`
       SELECT q.*, qv.publication_status
       FROM questions q
       JOIN quiz_versions qv ON qv.id = q.quiz_version_id
       WHERE q.id = ?
-    `).get(questionId) as any;
+    `, [questionId]);
 
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
@@ -393,10 +392,10 @@ router.delete('/questions/:id', requirePermission('quiz.manage'), (req: AuthRequ
       return res.status(400).json({ error: 'Cannot delete questions in a published version. You can deactivate them instead.' });
     }
 
-    db.transaction(() => {
-      db.prepare('DELETE FROM options WHERE question_id = ?').run(questionId);
-      db.prepare('DELETE FROM questions WHERE id = ?').run(questionId);
-    })();
+    await adapter.transaction(async (tx) => {
+      await tx.execute('DELETE FROM options WHERE question_id = ?', [questionId]);
+      await tx.execute('DELETE FROM questions WHERE id = ?', [questionId]);
+    });
 
     return res.json({ message: 'Question deleted successfully' });
   } catch (err: any) {
@@ -406,19 +405,20 @@ router.delete('/questions/:id', requirePermission('quiz.manage'), (req: AuthRequ
 });
 
 // 8. Reorder questions
-router.post('/questions/reorder', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+router.post('/questions/reorder', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { question_ids } = req.body;
     if (!Array.isArray(question_ids)) {
       return res.status(400).json({ error: 'question_ids array is required' });
     }
 
-    db.transaction(() => {
-      const updateOrder = db.prepare('UPDATE questions SET display_order = ? WHERE id = ?');
-      question_ids.forEach((id, index) => {
-        updateOrder.run(index + 1, id);
-      });
-    })();
+    await adapter.transaction(async (tx) => {
+      for (let index = 0; index < question_ids.length; index++) {
+        const id = question_ids[index];
+        await tx.execute('UPDATE questions SET display_order = ? WHERE id = ?', [index + 1, id]);
+      }
+    });
 
     return res.json({ message: 'Questions reordered successfully' });
   } catch (err: any) {
@@ -428,8 +428,9 @@ router.post('/questions/reorder', requirePermission('quiz.manage'), (req: AuthRe
 });
 
 // 9. POST /api/admin/questions/:questionId/options
-router.post('/questions/:questionId/options', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+router.post('/questions/:questionId/options', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { questionId } = req.params;
     const { label, stable_value } = req.body;
 
@@ -437,12 +438,12 @@ router.post('/questions/:questionId/options', requirePermission('quiz.manage'), 
       return res.status(400).json({ error: 'Option label is required' });
     }
 
-    const question = db.prepare(`
+    const question = await adapter.queryOne<any>(`
       SELECT q.*, qv.publication_status
       FROM questions q
       JOIN quiz_versions qv ON qv.id = q.quiz_version_id
       WHERE q.id = ?
-    `).get(questionId) as any;
+    `, [questionId]);
 
     if (!question) {
       return res.status(404).json({ error: 'Question not found' });
@@ -452,7 +453,9 @@ router.post('/questions/:questionId/options', requirePermission('quiz.manage'), 
       return res.status(400).json({ error: 'Cannot add options to a published version question' });
     }
 
-    const maxOrder = db.prepare('SELECT coalesce(max(display_order), 0) as max_ord FROM options WHERE question_id = ?').get(questionId) as { max_ord: number };
+    const maxOrder = (await adapter.queryOne<{ max_ord: number }>(`
+      SELECT coalesce(max(display_order), 0) as max_ord FROM options WHERE question_id = ?
+    `, [questionId])) || { max_ord: 0 };
     const display_order = maxOrder.max_ord + 1;
     const optId = 'opt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
     const safeLabel = String(label).trim();
@@ -461,12 +464,12 @@ router.post('/questions/:questionId/options', requirePermission('quiz.manage'), 
       : safeLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_') || `opt_${Date.now()}`
     ).slice(0, 50);
 
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO options (id, question_id, label, stable_value, display_order, is_active)
       VALUES (?, ?, ?, ?, ?, 1)
-    `).run(optId, questionId, safeLabel, resolvedValue, display_order);
+    `, [optId, questionId, safeLabel, resolvedValue, display_order]);
 
-    const option = db.prepare('SELECT * FROM options WHERE id = ?').get(optId);
+    const option = await adapter.queryOne('SELECT * FROM options WHERE id = ?', [optId]);
     return res.status(201).json({ message: 'Option added', option });
   } catch (err: any) {
     console.error('Error adding option:', err);
@@ -475,18 +478,19 @@ router.post('/questions/:questionId/options', requirePermission('quiz.manage'), 
 });
 
 // 10. PATCH /api/admin/options/:id
-router.patch('/options/:id', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+router.patch('/options/:id', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const optId = req.params.id;
     const { label, stable_value, display_order, is_active } = req.body;
 
-    const opt = db.prepare(`
+    const opt = await adapter.queryOne<any>(`
       SELECT o.*, qv.publication_status
       FROM options o
       JOIN questions q ON q.id = o.question_id
       JOIN quiz_versions qv ON qv.id = q.quiz_version_id
       WHERE o.id = ?
-    `).get(optId) as any;
+    `, [optId]);
 
     if (!opt) {
       return res.status(404).json({ error: 'Option not found' });
@@ -506,10 +510,10 @@ router.patch('/options/:id', requirePermission('quiz.manage'), (req: AuthRequest
 
     if (updates.length > 0) {
       params.push(optId);
-      db.prepare(`UPDATE options SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+      await adapter.execute(`UPDATE options SET ${updates.join(', ')} WHERE id = ?`, params);
     }
 
-    const updated = db.prepare('SELECT * FROM options WHERE id = ?').get(optId);
+    const updated = await adapter.queryOne('SELECT * FROM options WHERE id = ?', [optId]);
     return res.json({ message: 'Option updated', option: updated });
   } catch (err: any) {
     console.error('Error updating option:', err);
@@ -518,16 +522,17 @@ router.patch('/options/:id', requirePermission('quiz.manage'), (req: AuthRequest
 });
 
 // 11. DELETE /api/admin/options/:id
-router.delete('/options/:id', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+router.delete('/options/:id', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const optId = req.params.id;
-    const opt = db.prepare(`
+    const opt = await adapter.queryOne<any>(`
       SELECT o.*, qv.publication_status
       FROM options o
       JOIN questions q ON q.id = o.question_id
       JOIN quiz_versions qv ON qv.id = q.quiz_version_id
       WHERE o.id = ?
-    `).get(optId) as any;
+    `, [optId]);
 
     if (!opt) {
       return res.status(404).json({ error: 'Option not found' });
@@ -537,7 +542,7 @@ router.delete('/options/:id', requirePermission('quiz.manage'), (req: AuthReques
       return res.status(400).json({ error: 'Cannot delete option of a published version' });
     }
 
-    db.prepare('DELETE FROM options WHERE id = ?').run(optId);
+    await adapter.execute('DELETE FROM options WHERE id = ?', [optId]);
     return res.json({ message: 'Option deleted successfully' });
   } catch (err: any) {
     console.error('Error deleting option:', err);
@@ -547,10 +552,11 @@ router.delete('/options/:id', requirePermission('quiz.manage'), (req: AuthReques
 
 // 12. POST /api/admin/versions/:versionId/publish
 // Validates draft configuration and publishes new immutable version
-router.post('/versions/:versionId/publish', requirePermission('quiz.manage'), (req: AuthRequest, res: Response) => {
+router.post('/versions/:versionId/publish', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { versionId } = req.params;
-    const version = db.prepare('SELECT * FROM quiz_versions WHERE id = ?').get(versionId) as QuizVersion | undefined;
+    const version = await adapter.queryOne<QuizVersion>('SELECT * FROM quiz_versions WHERE id = ?', [versionId]);
 
     if (!version) {
       return res.status(404).json({ error: 'Quiz version not found' });
@@ -561,18 +567,18 @@ router.post('/versions/:versionId/publish', requirePermission('quiz.manage'), (r
     }
 
     // Validation checks
-    const activeQuestions = db.prepare(`
+    const activeQuestions = await adapter.query<QuizQuestion>(`
       SELECT * FROM questions WHERE quiz_version_id = ? AND is_active = 1
-    `).all(versionId) as QuizQuestion[];
+    `, [versionId]);
 
     if (activeQuestions.length === 0) {
       return res.status(400).json({ error: 'Cannot publish quiz: At least 1 active question is required.' });
     }
 
     for (const q of activeQuestions) {
-      const activeOptions = db.prepare(`
+      const activeOptions = await adapter.query<QuizOption>(`
         SELECT * FROM options WHERE question_id = ? AND is_active = 1
-      `).all(q.id) as QuizOption[];
+      `, [q.id]);
 
       if (activeOptions.length < 2) {
         return res.status(400).json({
@@ -597,23 +603,23 @@ router.post('/versions/:versionId/publish', requirePermission('quiz.manage'), (r
     // Execute publication transaction:
     // 1. Archive previous published version
     // 2. Publish this version
-    db.transaction(() => {
-      db.prepare(`
+    await adapter.transaction(async (tx) => {
+      await tx.execute(`
         UPDATE quiz_versions
-        SET publication_status = 'archived', updated_at = datetime('now')
+        SET publication_status = 'archived', updated_at = CURRENT_TIMESTAMP
         WHERE quiz_id = ? AND publication_status = 'published'
-      `).run(version.quiz_id);
+      `, [version.quiz_id]);
 
-      db.prepare(`
+      await tx.execute(`
         UPDATE quiz_versions
-        SET publication_status = 'published', published_at = datetime('now'), updated_at = datetime('now')
+        SET publication_status = 'published', published_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(versionId);
-    })();
+      `, [versionId]);
+    });
 
-    const updated = db.prepare('SELECT * FROM quiz_versions WHERE id = ?').get(versionId) as QuizVersion;
+    const updated = await adapter.queryOne<QuizVersion>('SELECT * FROM quiz_versions WHERE id = ?', [versionId]);
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,

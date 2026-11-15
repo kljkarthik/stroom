@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { User } from '../types';
 
 export function isAdminOrPartnerManager(role?: string): boolean {
@@ -11,8 +11,9 @@ export function isAdminOrPartnerManager(role?: string): boolean {
  * or owns / belongs to the requested partner account.
  * Returns the partner account and the user's effective partner_role, or throws an error with HTTP status.
  */
-export function assertPartnerAccess(user: User, partnerId: string, requiredPartnerRoles?: string[]) {
-  const partner = db.prepare('SELECT * FROM partner_accounts WHERE id = ?').get(partnerId) as any;
+export async function assertPartnerAccess(user: User, partnerId: string, requiredPartnerRoles?: string[]) {
+  const adapter = getDatabaseAdapter();
+  const partner = await adapter.queryOne<any>('SELECT * FROM partner_accounts WHERE id = ?', [partnerId]);
   if (!partner) {
     const err: any = new Error('Partner account not found');
     err.status = 404;
@@ -27,9 +28,9 @@ export function assertPartnerAccess(user: User, partnerId: string, requiredPartn
     return { partner, partnerRole: 'owner' };
   }
 
-  const membership = db.prepare(`
+  const membership = await adapter.queryOne<{ partner_role: string }>(`
     SELECT partner_role FROM partner_users WHERE partner_id = ? AND user_id = ?
-  `).get(partnerId, user.id) as { partner_role: string } | undefined;
+  `, [partnerId, user.id]);
 
   if (!membership) {
     const err: any = new Error('Forbidden: You do not have permission to access this partner account');
@@ -46,7 +47,7 @@ export function assertPartnerAccess(user: User, partnerId: string, requiredPartn
   return { partner, partnerRole: membership.partner_role };
 }
 
-export function logPartnerAudit(
+export async function logPartnerAudit(
   partnerId: string,
   userId: string | null,
   actorName: string,
@@ -56,17 +57,18 @@ export function logPartnerAudit(
   details?: any
 ) {
   try {
+    const adapter = getDatabaseAdapter();
     const id = 'paud_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO partner_audit_logs (id, partner_id, user_id, actor_name, action, entity_type, entity_id, details_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `).run(id, partnerId, userId, actorName, action, entityType, entityId || null, details ? JSON.stringify(details) : null);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, [id, partnerId, userId, actorName, action, entityType, entityId || null, details ? JSON.stringify(details) : null]);
   } catch (err) {
     console.warn('[partnerService.logPartnerAudit]', err);
   }
 }
 
-export function notifyPartner(
+export async function notifyPartner(
   partnerId: string,
   type: 'coordinator_message' | 'announcement' | 'operational_note' | 'verification_update',
   subject: string,
@@ -78,13 +80,14 @@ export function notifyPartner(
   senderUserId?: string | null
 ) {
   try {
+    const adapter = getDatabaseAdapter();
     const id = 'pcomm_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO partner_communications (
         id, partner_id, event_id, collaboration_id, sender_user_id, sender_name, sender_role, subject, message, type, is_read, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))
-    `).run(id, partnerId, eventId || null, collaborationId || null, senderUserId || null, senderName, senderRole, subject, message, type);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
+    `, [id, partnerId, eventId || null, collaborationId || null, senderUserId || null, senderName, senderRole, subject, message, type]);
     return id;
   } catch (err) {
     console.warn('[partnerService.notifyPartner]', err);
@@ -105,16 +108,17 @@ function getDateWindow(range?: string, from?: string, to?: string): { fromDate: 
   return { fromDate: past.toISOString().split('T')[0], toDate: now.toISOString().split('T')[0] };
 }
 
-export function getPartnerAnalytics(
+export async function getPartnerAnalytics(
   partnerId: string,
   filters: { range?: string; from?: string; to?: string; venueId?: string } = {}
 ) {
-  const venues = db.prepare(`
+  const adapter = getDatabaseAdapter();
+  const venues = await adapter.query<any>(`
     SELECT v.*, c.name as city_name
     FROM venues v
     JOIN cities c ON v.city_id = c.id
     WHERE v.partner_id = ?
-  `).all(partnerId) as any[];
+  `, [partnerId]);
 
   const venueIds = filters.venueId ? [filters.venueId] : venues.map((v) => v.id);
   const { fromDate, toDate } = getDateWindow(filters.range, filters.from, filters.to);
@@ -147,7 +151,7 @@ export function getPartnerAnalytics(
 
   // Events hosted at partner venues (strictly no PII)
   let eventsQuery = `
-    SELECT 
+    SELECT
       e.id,
       e.title,
       e.category,
@@ -177,7 +181,7 @@ export function getPartnerAnalytics(
   }
   eventsQuery += ` ORDER BY e.created_at DESC`;
 
-  const eventsPerformance = db.prepare(eventsQuery).all(...eventParams) as any[];
+  const eventsPerformance = await adapter.query<any>(eventsQuery, eventParams);
 
   // Enrich attendance rate per event
   for (const ev of eventsPerformance) {
@@ -187,7 +191,8 @@ export function getPartnerAnalytics(
   }
 
   // Collaborations count
-  const totalCollaborations = (db.prepare(`SELECT COUNT(*) as c FROM partner_collaborations WHERE partner_id = ?`).get(partnerId) as any)?.c || 0;
+  const collabRow = await adapter.queryOne<any>(`SELECT COUNT(*) as c FROM partner_collaborations WHERE partner_id = ?`, [partnerId]);
+  const totalCollaborations = collabRow?.c || 0;
 
   const upcomingHostedEvents = eventsPerformance.filter((e) => ['published', 'live'].includes(e.status)).length;
   const completedEvents = eventsPerformance.filter((e) => e.status === 'completed').length;
@@ -198,8 +203,8 @@ export function getPartnerAnalytics(
   const attendanceRate = confirmedRegistrations > 0 ? Math.round((actualVerifiedCheckins / confirmedRegistrations) * 100) : null;
 
   // Campaigns & Coupons scoped to partner
-  const campaignsPerformance = db.prepare(`
-    SELECT 
+  const campaignsPerformance = await adapter.query<any>(`
+    SELECT
       c.id,
       c.venue_id,
       v.name as venue_name,
@@ -224,7 +229,7 @@ export function getPartnerAnalytics(
     JOIN venues v ON c.venue_id = v.id
     WHERE c.partner_id = ? OR c.venue_id IN (${placeholders})
     ORDER BY c.created_at DESC
-  `).all(partnerId, ...venueIds) as any[];
+  `, [partnerId, ...venueIds]);
 
   for (const camp of campaignsPerformance) {
     camp.redemption_rate = camp.max_redemptions > 0
@@ -256,11 +261,11 @@ export function getPartnerAnalytics(
     checkinsParams.push(toDate);
   }
   checkinsByDateQuery += ` GROUP BY date(r.checked_in_at) ORDER BY date ASC`;
-  const checkinsByDate = db.prepare(checkinsByDateQuery).all(...checkinsParams) as any[];
+  const checkinsByDate = await adapter.query<any>(checkinsByDateQuery, checkinsParams);
 
   // Audited coupon redemptions log (anonymized pass reference, no member email/phone!)
   let redQuery = `
-    SELECT 
+    SELECT
       cr.id,
       cr.coupon_id,
       c.code as coupon_code,
@@ -288,7 +293,7 @@ export function getPartnerAnalytics(
     redParams.push(toDate);
   }
   redQuery += ` ORDER BY cr.redeemed_at DESC LIMIT 100`;
-  const redemptionsHistory = db.prepare(redQuery).all(...redParams) as any[];
+  const redemptionsHistory = await adapter.query<any>(redQuery, redParams);
 
   return {
     summary: {
@@ -313,8 +318,8 @@ export function getPartnerAnalytics(
   };
 }
 
-export function buildCsvExport(partnerId: string, reportType: 'events' | 'redemptions' | 'campaigns', filters: { range?: string; from?: string; to?: string } = {}): { filename: string; csv: string } {
-  const analytics = getPartnerAnalytics(partnerId, filters);
+export async function buildCsvExport(partnerId: string, reportType: 'events' | 'redemptions' | 'campaigns', filters: { range?: string; from?: string; to?: string } = {}): Promise<{ filename: string; csv: string }> {
+  const analytics = await getPartnerAnalytics(partnerId, filters);
   const esc = (val: any) => {
     const s = val === null || val === undefined ? '' : String(val);
     return `"${s.replace(/"/g, '""')}"`;

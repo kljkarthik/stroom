@@ -1,0 +1,46 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stroom-api",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2024-11-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "stroom-production-db",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID_FROM_WRANGLER_D1_CREATE",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA_BUCKET",
+      "bucket_name": "stroom-media-production",
+      "preview_bucket_name": "stroom-media-dev"
+    }
+  ],
+  "vars": {
+    "NODE_ENV": "production",
+    "PLATFORM_NAME": "STROOM — Strangers Room",
+    "DEFAULT_CITY": "Hyderabad",
+    "AUTH_RATE_LIMIT_MAX": "25"
+  },
+  "env": {
+    "dev": {
+      "vars": {
+        "NODE_ENV": "development",
+        "AUTH_RATE_LIMIT_MAX": "500"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "stroom-dev-db",
+          "database_id": "REPLACE_WITH_DEV_D1_DATABASE_ID",
+          "migrations_dir": "./migrations"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+# Cloudflare Pages Routing Configuration
+
+# Optional: If proxying API requests through Cloudflare Pages to Render, uncomment and replace with your Render backend URL:
+# /api/*  https://stroom-backend.onrender.com/api/:splat  200
+
+# Cloudflare Pages SPA Client-Side Routing
+# Redirect all deep links to the single-page entry index.html with HTTP 200
+/*    /index.html   200

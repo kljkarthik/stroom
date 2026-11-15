@@ -6,7 +6,7 @@ import { CertificateModal } from '../modals/CertificateModal';
 import { AuctionFormatConfigModal } from './AuctionFormatConfigModal';
 import { AuctionTeamManager } from './AuctionTeamManager';
 import { AuctionPlayerManager } from './AuctionPlayerManager';
-import { api } from '../../services/api';
+import { api, API_BASE } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { AuctionRoom, AuctionTeam, AuctionPlayer, Bid } from '../../types';
 import {
@@ -150,7 +150,7 @@ export const AuctionArena: React.FC<AuctionArenaProps> = ({
       setAuction(data.auction);
       setTeams(data.teams || []);
       setPlayers(data.players || []);
-      
+
       const activeLot = data.currentLot || data.currentPlayer || data.players?.find((p: any) => p.status === 'IN_AUCTION') || data.players?.[0] || null;
       setCurrentPlayer(activeLot);
       setRecentBids(data.recentBids || []);
@@ -192,7 +192,7 @@ export const AuctionArena: React.FC<AuctionArenaProps> = ({
     }
 
     try {
-      const streamUrl = `/api/auctions/${roomId}/stream`;
+      const streamUrl = `${API_BASE}/auctions/${roomId}/stream`;
       const es = new EventSource(streamUrl);
       sseRef.current = es;
 
@@ -523,11 +523,11 @@ export const AuctionArena: React.FC<AuctionArenaProps> = ({
 
   return (
     <div className={`min-h-screen bg-stroom-black text-white flex flex-col font-sans select-none ${isProjectorMode ? 'p-2 sm:p-4' : 'pb-16'}`}>
-      
+
       {/* 1. TOP BROADCAST CONTROL BAR */}
       <header className="bg-stroom-cardDark border-b border-stroom-borderDark px-4 sm:px-6 py-3 sticky top-0 z-40 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          
+
           {/* Left: Brand & Back */}
           <div className="flex items-center gap-3">
             <button
@@ -678,7 +678,7 @@ export const AuctionArena: React.FC<AuctionArenaProps> = ({
 
       {/* 2. MAIN BROADCAST ARENA STAGE */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-2 sm:px-4 lg:px-6 py-4 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        
+
         {/* LEFT COLUMN: FRANCHISE TEAMS & SQUADS (3 cols) */}
         <aside className="lg:col-span-3 space-y-3 order-2 lg:order-1">
           <div className="bg-stroom-cardDark rounded-3xl p-4 border border-stroom-borderDark">
@@ -810,7 +810,7 @@ export const AuctionArena: React.FC<AuctionArenaProps> = ({
         <section className="lg:col-span-6 space-y-4 order-1 lg:order-2">
           {currentPlayer ? (
             <div className="bg-stroom-cardDark rounded-3xl border-2 border-stroom-borderDark overflow-hidden shadow-2xl relative">
-              
+
               {/* Countdown Clock Header Banner */}
               <div className="bg-black/60 px-6 py-3 border-b border-stroom-borderDark flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -974,7 +974,7 @@ export const AuctionArena: React.FC<AuctionArenaProps> = ({
 
           {/* 3. INTERACTIVE BIDDING & OPERATOR CONTROLS */}
           <div className="bg-stroom-cardDark rounded-3xl p-4 sm:p-5 border border-stroom-borderDark">
-            
+
             {/* Operator Controls Bar (Admin / Auctioneer) */}
             {canOperateAuction && (
               <div className="mb-4 pb-4 border-b border-stroom-borderDark">
@@ -1146,7 +1146,7 @@ export const AuctionArena: React.FC<AuctionArenaProps> = ({
         {/* RIGHT COLUMN: TABS (LIVE BIDS FEED & PLAYER LOT POOL) (3 cols) */}
         <aside className="lg:col-span-3 space-y-3 order-3">
           <div className="bg-stroom-cardDark rounded-3xl p-4 border border-stroom-borderDark">
-            
+
             {/* Tab Switcher */}
             <div className="grid grid-cols-2 p-1 rounded-2xl bg-black/40 border border-white/5 mb-3">
               <button

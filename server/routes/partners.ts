@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { requireAuth, AuthRequest, optionalAuth } from '../middleware/auth';
 import { Venue, Coupon, PartnerProposal } from '../types';
 import {
@@ -33,10 +33,11 @@ function handlePartnerErr(res: Response, err: any) {
 // =========================================================================
 
 // 1. GET all verified partner venues (Public directory - strictly no private calendars)
-router.get('/venues', (req, res) => {
+router.get('/venues', async (req, res) => {
+    const adapter = getDatabaseAdapter();
   try {
-    const venues = db.prepare(`
-      SELECT 
+    const venues = await adapter.query(`
+      SELECT
         v.*,
         c.name as city_name,
         c.state as state_name,
@@ -46,7 +47,7 @@ router.get('/venues', (req, res) => {
       JOIN cities c ON v.city_id = c.id
       WHERE v.is_verified = 1
       ORDER BY v.partnership_tier DESC, v.name ASC
-    `).all() as Venue[];
+    `) as Venue[];
 
     return res.json({ venues });
   } catch (err: any) {
@@ -55,23 +56,24 @@ router.get('/venues', (req, res) => {
 });
 
 // 2. GET Real Partner Metrics for a Venue (No fabricated data, no PII)
-router.get('/stats/:venueId', (req, res) => {
+router.get('/stats/:venueId', async (req, res) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { venueId } = req.params;
 
-    const venue = db.prepare(`
-      SELECT v.*, c.name as city_name 
+    const venue = await adapter.queryOne(`
+      SELECT v.*, c.name as city_name
       FROM venues v
       JOIN cities c ON v.city_id = c.id
       WHERE v.id = ?
-    `).get(venueId) as Venue | undefined;
+    `, [venueId]) as Venue | undefined;
 
     if (!venue) {
       return res.status(404).json({ error: 'Venue not found' });
     }
 
-    const events = db.prepare(`
-      SELECT 
+    const events = await adapter.query(`
+      SELECT
         e.id,
         e.title,
         e.event_date,
@@ -83,16 +85,16 @@ router.get('/stats/:venueId', (req, res) => {
       FROM events e
       WHERE e.venue_id = ?
       ORDER BY e.event_date DESC
-    `).all(venueId);
+    `, [venueId]);
 
-    const coupons = db.prepare(`
-      SELECT 
+    const coupons = await adapter.query(`
+      SELECT
         c.*,
         (SELECT COUNT(*) FROM coupon_redemptions WHERE coupon_id = c.id) as verified_redemptions,
         (SELECT COALESCE(SUM(order_amount), 0) FROM coupon_redemptions WHERE coupon_id = c.id AND order_amount IS NOT NULL) as verified_order_total
       FROM coupons c
       WHERE c.venue_id = ?
-    `).all(venueId);
+    `, [venueId]);
 
     const aggregate = {
       venueName: venue.name,
@@ -126,7 +128,8 @@ router.get('/stats/:venueId', (req, res) => {
 });
 
 // 3. POST Submit Public Collaboration Proposal (Partner With Us page)
-router.post('/proposals', optionalAuth, (req: AuthRequest, res: Response) => {
+router.post('/proposals', optionalAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const {
       venue_id,
@@ -167,11 +170,10 @@ router.post('/proposals', optionalAuth, (req: AuthRequest, res: Response) => {
       ],
     });
 
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO partner_proposals (id, venue_id, proposer_name, proposer_email, proposer_phone, venue_name, city, event_type, proposed_date, expected_attendees, perks_offered, status, proposal_pdf_data)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?)
-    `).run(
-      proposalId,
+    `, [proposalId,
       venue_id || null,
       proposer_name,
       proposer_email,
@@ -182,8 +184,7 @@ router.post('/proposals', optionalAuth, (req: AuthRequest, res: Response) => {
       proposed_date,
       expected_attendees || 50,
       perks_offered || '',
-      proposalData
-    );
+      proposalData]);
 
     return res.status(201).json({
       message: 'Collaboration proposal successfully submitted to STROOM Partnerships',
@@ -195,15 +196,16 @@ router.post('/proposals', optionalAuth, (req: AuthRequest, res: Response) => {
 });
 
 // 4. GET Proposals list (Admin or authenticated inquiries)
-router.get('/proposals', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/proposals', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     if (isAdminOrPartnerManager(req.user!.role)) {
-      const proposals = db.prepare(`SELECT * FROM partner_proposals ORDER BY created_at DESC`).all() as PartnerProposal[];
+      const proposals = await adapter.query(`SELECT * FROM partner_proposals ORDER BY created_at DESC`) as PartnerProposal[];
       return res.json({ proposals });
     }
-    const proposals = db.prepare(`
+    const proposals = await adapter.query(`
       SELECT * FROM partner_proposals WHERE proposer_email = ? ORDER BY created_at DESC
-    `).all(req.user!.email) as PartnerProposal[];
+    `, [req.user!.email]) as PartnerProposal[];
     return res.json({ proposals });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch proposals' });
@@ -211,7 +213,8 @@ router.get('/proposals', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // 5. POST Create Coupon (Maintains compatibility while enforcing approval rules for partners)
-router.post('/coupons', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/coupons', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const {
       venue_id,
@@ -234,7 +237,7 @@ router.post('/coupons', requireAuth, (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Missing required coupon details' });
     }
 
-    const venue = db.prepare('SELECT * FROM venues WHERE id = ?').get(venue_id) as any;
+    const venue = await adapter.queryOne('SELECT * FROM venues WHERE id = ?', [venue_id]) as any;
     if (!venue) {
       return res.status(404).json({ error: 'Venue not found' });
     }
@@ -243,7 +246,7 @@ router.post('/coupons', requireAuth, (req: AuthRequest, res: Response) => {
       if (!venue.partner_id) {
         return res.status(403).json({ error: 'Forbidden: Venue is not linked to your partner account' });
       }
-      assertPartnerAccess(req.user!, venue.partner_id, ['owner', 'manager']);
+      await assertPartnerAccess(req.user!, venue.partner_id, ['owner', 'manager']);
     }
 
     const isAdmin = isAdminOrPartnerManager(req.user!.role);
@@ -252,15 +255,14 @@ router.post('/coupons', requireAuth, (req: AuthRequest, res: Response) => {
 
     const couponId = 'cpn_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO coupons (
         id, venue_id, partner_id, code, title, description, discount_type, discount_value,
         offer_category, min_purchase, valid_from, valid_until, max_redemptions,
         eligible_event_id, eligible_audience, terms_conditions, status, approval_status, created_by
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      couponId,
+    `, [couponId,
       venue_id,
       venue.partner_id || null,
       code.toUpperCase().trim(),
@@ -278,8 +280,7 @@ router.post('/coupons', requireAuth, (req: AuthRequest, res: Response) => {
       terms_conditions || '',
       status,
       approvalStatus,
-      req.user!.id
-    );
+      req.user!.id]);
 
     return res.status(201).json({
       message: isAdmin ? 'Coupon created and activated' : 'Campaign submitted for admin approval',
@@ -296,21 +297,22 @@ router.post('/coupons', requireAuth, (req: AuthRequest, res: Response) => {
 // =========================================================================
 
 // GET authenticated user's partner accounts (or all for admin)
-router.get('/my-accounts', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/my-accounts', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const user = req.user!;
     let accounts: any[] = [];
 
     if (isAdminOrPartnerManager(user.role)) {
-      accounts = db.prepare(`SELECT * FROM partner_accounts ORDER BY verification_status = 'Verified' DESC, created_at DESC`).all();
+      accounts = await adapter.query(`SELECT * FROM partner_accounts ORDER BY verification_status = 'Verified' DESC, created_at DESC`);
     } else {
-      accounts = db.prepare(`
+      accounts = await adapter.query(`
         SELECT DISTINCT p.*, COALESCE(pu.partner_role, 'owner') as user_partner_role
         FROM partner_accounts p
         LEFT JOIN partner_users pu ON p.id = pu.partner_id AND pu.user_id = ?
         WHERE p.owner_user_id = ? OR pu.user_id = ?
         ORDER BY p.created_at DESC
-      `).all(user.id, user.id, user.id);
+      `, [user.id, user.id, user.id]);
     }
 
     return res.json({ success: true, accounts });
@@ -320,7 +322,8 @@ router.get('/my-accounts', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // POST Save Partner Onboarding Draft (Steps 1-4)
-router.post('/onboarding/save', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/onboarding/save', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const user = req.user!;
     const {
@@ -353,8 +356,8 @@ router.post('/onboarding/save', requireAuth, (req: AuthRequest, res: Response) =
     const interestsJson = JSON.stringify(Array.isArray(collaboration_interests) ? collaboration_interests : []);
 
     if (partner_id) {
-      const { partner } = assertPartnerAccess(user, partner_id, ['owner', 'manager']);
-      db.prepare(`
+      const { partner } = await assertPartnerAccess(user, partner_id, ['owner', 'manager']);
+      await adapter.execute(`
         UPDATE partner_accounts
         SET business_name = ?,
             category = ?,
@@ -373,10 +376,9 @@ router.post('/onboarding/save', requireAuth, (req: AuthRequest, res: Response) =
             business_logo = COALESCE(?, business_logo),
             cover_url = COALESCE(?, cover_url),
             onboarding_step = MAX(onboarding_step, ?),
-            updated_at = datetime('now')
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(
-        business_name.trim(),
+      `, [business_name.trim(),
         category,
         city,
         address,
@@ -393,16 +395,15 @@ router.post('/onboarding/save', requireAuth, (req: AuthRequest, res: Response) =
         business_logo,
         cover_url,
         Number(onboarding_step) || 1,
-        partner.id
-      );
+        partner.id]);
 
-      const updated = db.prepare('SELECT * FROM partner_accounts WHERE id = ?').get(partner.id);
+      const updated = await adapter.queryOne('SELECT * FROM partner_accounts WHERE id = ?', [partner.id]);
       return res.json({ success: true, partner: updated, message: 'Onboarding progress saved.' });
     }
 
     const newPartnerId = 'ptr_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
-    db.transaction(() => {
-      db.prepare(`
+    await adapter.transaction(async (tx) => {
+      await tx.execute(`
         INSERT INTO partner_accounts (
           id, owner_user_id, business_name, business_logo, cover_url, category, description,
           contact_person, contact_email, contact_phone, website, city, address, maps_url,
@@ -410,8 +411,7 @@ router.post('/onboarding/save', requireAuth, (req: AuthRequest, res: Response) =
           verification_status, onboarding_step
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Draft', ?)
-      `).run(
-        newPartnerId,
+      `, [newPartnerId,
         user.id,
         business_name.trim(),
         business_logo || null,
@@ -429,19 +429,18 @@ router.post('/onboarding/save', requireAuth, (req: AuthRequest, res: Response) =
         facilitiesJson,
         hoursJson,
         interestsJson,
-        Number(onboarding_step) || 1
-      );
+        Number(onboarding_step) || 1]);
 
       const puId = 'pu_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
-      db.prepare(`
+      await tx.execute(`
         INSERT INTO partner_users (id, partner_id, user_id, partner_role)
         VALUES (?, ?, ?, 'owner')
-      `).run(puId, newPartnerId, user.id);
+      `, [puId, newPartnerId, user.id]);
 
-      logPartnerAudit(newPartnerId, user.id, user.full_name, 'ONBOARDING_DRAFT_CREATED', 'partner_account', newPartnerId, { business_name });
-    })();
+      await logPartnerAudit(newPartnerId, user.id, user.full_name, 'ONBOARDING_DRAFT_CREATED', 'partner_account', newPartnerId, { business_name });
+    });
 
-    const created = db.prepare('SELECT * FROM partner_accounts WHERE id = ?').get(newPartnerId);
+    const created = await adapter.queryOne('SELECT * FROM partner_accounts WHERE id = ?', [newPartnerId]);
     return res.status(201).json({ success: true, partner: created, message: 'Partner draft created.' });
   } catch (err: any) {
     return handlePartnerErr(res, err);
@@ -449,7 +448,8 @@ router.post('/onboarding/save', requireAuth, (req: AuthRequest, res: Response) =
 });
 
 // POST Submit Partner Account for Admin Verification (Never auto-verifies!)
-router.post('/onboarding/submit', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/onboarding/submit', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const user = req.user!;
     const { partner_id } = req.body;
@@ -457,7 +457,7 @@ router.post('/onboarding/submit', requireAuth, (req: AuthRequest, res: Response)
       return res.status(400).json({ error: 'partner_id is required' });
     }
 
-    const { partner } = assertPartnerAccess(user, partner_id, ['owner', 'manager']);
+    const { partner } = await assertPartnerAccess(user, partner_id, ['owner', 'manager']);
 
     if (!partner.business_name || !partner.contact_email || !partner.city) {
       return res.status(400).json({ error: 'Please complete business name, contact email, and city before submitting.' });
@@ -467,31 +467,30 @@ router.post('/onboarding/submit', requireAuth, (req: AuthRequest, res: Response)
       return res.status(400).json({ error: 'Partner account is already verified.' });
     }
 
-    db.transaction(() => {
-      db.prepare(`
+    await adapter.transaction(async (tx) => {
+      await tx.execute(`
         UPDATE partner_accounts
         SET verification_status = 'Submitted',
             onboarding_step = 5,
             verification_notes = 'Application submitted for STROOM Partnerships verification review.',
-            updated_at = datetime('now')
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(partner_id);
+      `, [partner_id]);
 
       // Auto-create initial venue record if partner has none yet
-      const venueCount = (db.prepare('SELECT COUNT(*) as c FROM venues WHERE partner_id = ?').get(partner_id) as any)?.c || 0;
+      const venueCount = (await tx.queryOne('SELECT COUNT(*) as c FROM venues WHERE partner_id = ?', [partner_id]) as any)?.c || 0;
       if (venueCount === 0 && partner.address) {
-        const cityRow = db.prepare('SELECT id FROM cities WHERE LOWER(name) = LOWER(?)').get(partner.city) as { id: string } | undefined;
+        const cityRow = await tx.queryOne('SELECT id FROM cities WHERE LOWER(name) = LOWER(?)', [partner.city]) as { id: string } | undefined;
         const cityId = cityRow?.id || 'city_hyd';
         const venueId = 'ven_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-        db.prepare(`
+        await tx.execute(`
           INSERT INTO venues (
             id, city_id, partner_id, name, area, address, capacity, partner_type,
             contact_name, contact_email, contact_phone, is_verified, partnership_tier,
             facilities_json, maps_url
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Pending Verification', ?, ?)
-        `).run(
-          venueId,
+        `, [venueId,
           cityId,
           partner_id,
           partner.business_name,
@@ -503,12 +502,11 @@ router.post('/onboarding/submit', requireAuth, (req: AuthRequest, res: Response)
           partner.contact_email,
           partner.contact_phone || '',
           partner.facilities_json || '[]',
-          partner.maps_url || ''
-        );
+          partner.maps_url || '']);
       }
 
-      logPartnerAudit(partner_id, user.id, user.full_name, 'PARTNER_SUBMITTED_FOR_VERIFICATION', 'partner_account', partner_id);
-      notifyPartner(
+      await logPartnerAudit(partner_id, user.id, user.full_name, 'PARTNER_SUBMITTED_FOR_VERIFICATION', 'partner_account', partner_id);
+      await notifyPartner(
         partner_id,
         'verification_update',
         'Verification Submission Received',
@@ -516,9 +514,9 @@ router.post('/onboarding/submit', requireAuth, (req: AuthRequest, res: Response)
         'STROOM Partnerships',
         'admin'
       );
-    })();
+    });
 
-    const updated = db.prepare('SELECT * FROM partner_accounts WHERE id = ?').get(partner_id);
+    const updated = await adapter.queryOne('SELECT * FROM partner_accounts WHERE id = ?', [partner_id]);
     return res.json({ success: true, partner: updated, message: 'Business submitted for verification review!' });
   } catch (err: any) {
     return handlePartnerErr(res, err);
@@ -526,11 +524,12 @@ router.post('/onboarding/submit', requireAuth, (req: AuthRequest, res: Response)
 });
 
 // PUT Update Business Profile (Strictly rejects unauthorized status elevation)
-router.put('/accounts/:partnerId/profile', requireAuth, (req: AuthRequest, res: Response) => {
+router.put('/accounts/:partnerId/profile', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const user = req.user!;
     const { partnerId } = req.params;
-    const { partner } = assertPartnerAccess(user, partnerId, ['owner', 'manager']);
+    const { partner } = await assertPartnerAccess(user, partnerId, ['owner', 'manager']);
 
     const {
       business_name,
@@ -552,7 +551,7 @@ router.put('/accounts/:partnerId/profile', requireAuth, (req: AuthRequest, res: 
       collaboration_interests,
     } = req.body;
 
-    db.prepare(`
+    await adapter.execute(`
       UPDATE partner_accounts
       SET business_name = COALESCE(?, business_name),
           business_logo = COALESCE(?, business_logo),
@@ -571,10 +570,9 @@ router.put('/accounts/:partnerId/profile', requireAuth, (req: AuthRequest, res: 
           facilities_json = COALESCE(?, facilities_json),
           operating_hours_json = COALESCE(?, operating_hours_json),
           collaboration_interests_json = COALESCE(?, collaboration_interests_json),
-          updated_at = datetime('now')
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(
-      business_name,
+    `, [business_name,
       business_logo,
       cover_url,
       category,
@@ -591,12 +589,11 @@ router.put('/accounts/:partnerId/profile', requireAuth, (req: AuthRequest, res: 
       Array.isArray(facilities) ? JSON.stringify(facilities) : null,
       operating_hours ? JSON.stringify(operating_hours) : null,
       Array.isArray(collaboration_interests) ? JSON.stringify(collaboration_interests) : null,
-      partner.id
-    );
+      partner.id]);
 
-    logPartnerAudit(partnerId, user.id, user.full_name, 'BUSINESS_PROFILE_UPDATED', 'partner_account', partnerId);
+    await logPartnerAudit(partnerId, user.id, user.full_name, 'BUSINESS_PROFILE_UPDATED', 'partner_account', partnerId);
 
-    const updated = db.prepare('SELECT * FROM partner_accounts WHERE id = ?').get(partnerId);
+    const updated = await adapter.queryOne('SELECT * FROM partner_accounts WHERE id = ?', [partnerId]);
     return res.json({ success: true, partner: updated, message: 'Business profile updated successfully.' });
   } catch (err: any) {
     return handlePartnerErr(res, err);
@@ -607,40 +604,41 @@ router.put('/accounts/:partnerId/profile', requireAuth, (req: AuthRequest, res: 
 // PARTNER DASHBOARD OVERVIEW
 // =========================================================================
 
-router.get('/accounts/:partnerId/dashboard', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/dashboard', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    const { partner, partnerRole } = assertPartnerAccess(req.user!, partnerId);
+    const { partner, partnerRole } = await assertPartnerAccess(req.user!, partnerId);
 
-    const venues = db.prepare(`
+    const venues = await adapter.query(`
       SELECT v.*, c.name as city_name
       FROM venues v
       JOIN cities c ON v.city_id = c.id
       WHERE v.partner_id = ?
       ORDER BY v.name ASC
-    `).all(partnerId);
+    `, [partnerId]);
 
-    const analytics = getPartnerAnalytics(partnerId);
+    const analytics = await getPartnerAnalytics(partnerId);
 
-    const collaborations = db.prepare(`
+    const collaborations = await adapter.query(`
       SELECT pc.*, v.name as venue_name
       FROM partner_collaborations pc
       JOIN venues v ON pc.venue_id = v.id
       WHERE pc.partner_id = ?
       ORDER BY pc.created_at DESC
       LIMIT 10
-    `).all(partnerId);
+    `, [partnerId]);
 
-    const communications = db.prepare(`
+    const communications = await adapter.query(`
       SELECT * FROM partner_communications
       WHERE partner_id = ?
       ORDER BY created_at DESC
       LIMIT 10
-    `).all(partnerId);
+    `, [partnerId]);
 
-    const unreadCommsCount = (db.prepare(`
+    const unreadCommsCount = (await adapter.queryOne(`
       SELECT COUNT(*) as c FROM partner_communications WHERE partner_id = ? AND is_read = 0
-    `).get(partnerId) as any)?.c || 0;
+    `, [partnerId]) as any)?.c || 0;
 
     return res.json({
       success: true,
@@ -664,13 +662,14 @@ router.get('/accounts/:partnerId/dashboard', requireAuth, (req: AuthRequest, res
 // VENUE MANAGEMENT & AVAILABILITY CALENDAR
 // =========================================================================
 
-router.get('/accounts/:partnerId/venues', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/venues', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
 
-    const venues = db.prepare(`
-      SELECT 
+    const venues = await adapter.query(`
+      SELECT
         v.*,
         c.name as city_name,
         (SELECT COUNT(*) FROM events e WHERE e.venue_id = v.id AND e.status IN ('published', 'live')) as upcoming_events_count,
@@ -679,7 +678,7 @@ router.get('/accounts/:partnerId/venues', requireAuth, (req: AuthRequest, res: R
       JOIN cities c ON v.city_id = c.id
       WHERE v.partner_id = ?
       ORDER BY v.created_at DESC
-    `).all(partnerId);
+    `, [partnerId]);
 
     return res.json({ success: true, venues });
   } catch (err: any) {
@@ -687,10 +686,11 @@ router.get('/accounts/:partnerId/venues', requireAuth, (req: AuthRequest, res: R
   }
 });
 
-router.post('/accounts/:partnerId/venues', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/accounts/:partnerId/venues', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    const { partner } = assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
+    const { partner } = await assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
 
     const {
       name,
@@ -714,19 +714,18 @@ router.post('/accounts/:partnerId/venues', requireAuth, (req: AuthRequest, res: 
       return res.status(400).json({ error: 'Venue name, city, and address are required' });
     }
 
-    const cityRow = db.prepare('SELECT id FROM cities WHERE LOWER(name) = LOWER(?) OR id = ?').get(city, city) as { id: string } | undefined;
+    const cityRow = await adapter.queryOne('SELECT id FROM cities WHERE LOWER(name) = LOWER(?) OR id = ?', [city, city]) as { id: string } | undefined;
     const cityId = cityRow?.id || 'city_hyd';
     const venueId = 'ven_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12);
 
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO venues (
         id, city_id, partner_id, name, area, address, capacity, partner_type,
         contact_name, contact_email, contact_phone, is_verified, partnership_tier,
         photos_json, facilities_json, event_spaces_json, operating_hours, accessibility_info, maps_url
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      venueId,
+    `, [venueId,
       cityId,
       partnerId,
       name.trim(),
@@ -744,23 +743,23 @@ router.post('/accounts/:partnerId/venues', requireAuth, (req: AuthRequest, res: 
       JSON.stringify(Array.isArray(event_spaces) ? event_spaces : []),
       operating_hours || '09:00 AM - 11:00 PM',
       accessibility_info || 'Standard entrance',
-      maps_url || ''
-    );
+      maps_url || '']);
 
-    logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'VENUE_CREATED', 'venue', venueId, { name });
-    const venue = db.prepare('SELECT v.*, c.name as city_name FROM venues v JOIN cities c ON v.city_id = c.id WHERE v.id = ?').get(venueId);
+    await logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'VENUE_CREATED', 'venue', venueId, { name });
+    const venue = await adapter.queryOne('SELECT v.*, c.name as city_name FROM venues v JOIN cities c ON v.city_id = c.id WHERE v.id = ?', [venueId]);
     return res.status(201).json({ success: true, venue });
   } catch (err: any) {
     return handlePartnerErr(res, err);
   }
 });
 
-router.put('/accounts/:partnerId/venues/:venueId', requireAuth, (req: AuthRequest, res: Response) => {
+router.put('/accounts/:partnerId/venues/:venueId', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId, venueId } = req.params;
-    assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
+    await assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
 
-    const venue = db.prepare('SELECT * FROM venues WHERE id = ? AND partner_id = ?').get(venueId, partnerId) as any;
+    const venue = await adapter.queryOne('SELECT * FROM venues WHERE id = ? AND partner_id = ?', [venueId, partnerId]) as any;
     if (!venue) {
       return res.status(404).json({ error: 'Venue not found under this partner account' });
     }
@@ -782,7 +781,7 @@ router.put('/accounts/:partnerId/venues/:venueId', requireAuth, (req: AuthReques
       photos,
     } = req.body;
 
-    db.prepare(`
+    await adapter.execute(`
       UPDATE venues
       SET name = COALESCE(?, name),
           area = COALESCE(?, area),
@@ -799,8 +798,7 @@ router.put('/accounts/:partnerId/venues/:venueId', requireAuth, (req: AuthReques
           maps_url = COALESCE(?, maps_url),
           photos_json = COALESCE(?, photos_json)
       WHERE id = ? AND partner_id = ?
-    `).run(
-      name,
+    `, [name,
       area,
       address,
       partner_type,
@@ -815,11 +813,10 @@ router.put('/accounts/:partnerId/venues/:venueId', requireAuth, (req: AuthReques
       maps_url,
       Array.isArray(photos) ? JSON.stringify(photos) : null,
       venueId,
-      partnerId
-    );
+      partnerId]);
 
-    logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'VENUE_UPDATED', 'venue', venueId);
-    const updated = db.prepare('SELECT v.*, c.name as city_name FROM venues v JOIN cities c ON v.city_id = c.id WHERE v.id = ?').get(venueId);
+    await logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'VENUE_UPDATED', 'venue', venueId);
+    const updated = await adapter.queryOne('SELECT v.*, c.name as city_name FROM venues v JOIN cities c ON v.city_id = c.id WHERE v.id = ?', [venueId]);
     return res.json({ success: true, venue: updated });
   } catch (err: any) {
     return handlePartnerErr(res, err);
@@ -827,24 +824,25 @@ router.put('/accounts/:partnerId/venues/:venueId', requireAuth, (req: AuthReques
 });
 
 // Private Partner Venue Availability Calendar
-router.get('/accounts/:partnerId/venues/:venueId/availability', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/venues/:venueId/availability', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId, venueId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
 
-    const venue = db.prepare('SELECT * FROM venues WHERE id = ? AND partner_id = ?').get(venueId, partnerId);
+    const venue = await adapter.queryOne('SELECT * FROM venues WHERE id = ? AND partner_id = ?', [venueId, partnerId]);
     if (!venue) {
       return res.status(404).json({ error: 'Venue not found under this partner account' });
     }
 
-    const slots = db.prepare(`
+    const slots = await adapter.query(`
       SELECT va.*, pc.event_name as collaboration_event_name, e.title as event_title
       FROM venue_availability va
       LEFT JOIN partner_collaborations pc ON va.collaboration_id = pc.id
       LEFT JOIN events e ON va.event_id = e.id
       WHERE va.venue_id = ?
       ORDER BY va.date ASC, va.time_slot ASC
-    `).all(venueId);
+    `, [venueId]);
 
     return res.json({ success: true, availability: slots });
   } catch (err: any) {
@@ -853,12 +851,13 @@ router.get('/accounts/:partnerId/venues/:venueId/availability', requireAuth, (re
 });
 
 // Set Venue Availability with Double-Booking Prevention
-router.post('/accounts/:partnerId/venues/:venueId/availability', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/accounts/:partnerId/venues/:venueId/availability', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId, venueId } = req.params;
-    assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
+    await assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
 
-    const venue = db.prepare('SELECT * FROM venues WHERE id = ? AND partner_id = ?').get(venueId, partnerId);
+    const venue = await adapter.queryOne('SELECT * FROM venues WHERE id = ? AND partner_id = ?', [venueId, partnerId]);
     if (!venue) {
       return res.status(404).json({ error: 'Venue not found under this partner account' });
     }
@@ -874,11 +873,11 @@ router.post('/accounts/:partnerId/venues/:venueId/availability', requireAuth, (r
     }
 
     // Check double-booking conflicts across exact slot or full_day overlap
-    const conflict = db.prepare(`
+    const conflict = await adapter.queryOne(`
       SELECT * FROM venue_availability
       WHERE venue_id = ? AND date = ? AND status IN ('booked', 'proposed')
       AND (time_slot = ? OR time_slot = 'full_day' OR ? = 'full_day')
-    `).get(venueId, date, slot, slot) as any;
+    `, [venueId, date, slot, slot]) as any;
 
     if (conflict) {
       return res.status(409).json({
@@ -886,24 +885,24 @@ router.post('/accounts/:partnerId/venues/:venueId/availability', requireAuth, (r
       });
     }
 
-    const existing = db.prepare(`
+    const existing = await adapter.queryOne(`
       SELECT id FROM venue_availability WHERE venue_id = ? AND date = ? AND time_slot = ?
-    `).get(venueId, date, slot) as { id: string } | undefined;
+    `, [venueId, date, slot]) as { id: string } | undefined;
 
     if (existing) {
-      db.prepare(`
+      await adapter.execute(`
         UPDATE venue_availability SET status = ?, notes = ? WHERE id = ?
-      `).run(status, notes || '', existing.id);
+      `, [status, notes || '', existing.id]);
     } else {
       const id = 'va_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
-      db.prepare(`
+      await adapter.execute(`
         INSERT INTO venue_availability (id, venue_id, partner_id, date, time_slot, status, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(id, venueId, partnerId, date, slot, status, notes || '');
+      `, [id, venueId, partnerId, date, slot, status, notes || '']);
     }
 
-    logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'VENUE_AVAILABILITY_UPDATED', 'venue_availability', venueId, { date, slot, status });
-    const slots = db.prepare('SELECT * FROM venue_availability WHERE venue_id = ? ORDER BY date ASC').all(venueId);
+    await logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'VENUE_AVAILABILITY_UPDATED', 'venue_availability', venueId, { date, slot, status });
+    const slots = await adapter.query('SELECT * FROM venue_availability WHERE venue_id = ? ORDER BY date ASC', [venueId]);
     return res.json({ success: true, availability: slots });
   } catch (err: any) {
     return handlePartnerErr(res, err);
@@ -914,24 +913,25 @@ router.post('/accounts/:partnerId/venues/:venueId/availability', requireAuth, (r
 // EVENT COLLABORATIONS & PARTNER HOSTED EVENTS
 // =========================================================================
 
-router.get('/accounts/:partnerId/collaborations', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/collaborations', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
 
-    const collaborations = db.prepare(`
+    const collaborations = await adapter.query(`
       SELECT pc.*, v.name as venue_name, v.address as venue_address, e.seats_booked, e.seats_total
       FROM partner_collaborations pc
       JOIN venues v ON pc.venue_id = v.id
       LEFT JOIN events e ON pc.event_id = e.id
       WHERE pc.partner_id = ?
       ORDER BY pc.created_at DESC
-    `).all(partnerId) as any[];
+    `, [partnerId]) as any[];
 
     for (const col of collaborations) {
-      col.comments = db.prepare(`
+      col.comments = await adapter.query(`
         SELECT * FROM collaboration_comments WHERE collaboration_id = ? ORDER BY created_at ASC
-      `).all(col.id);
+      `, [col.id]);
       try {
         col.timeline = JSON.parse(col.timeline_json || '[]');
       } catch {
@@ -946,14 +946,15 @@ router.get('/accounts/:partnerId/collaborations', requireAuth, (req: AuthRequest
 });
 
 // Partner responds to collaboration proposal (Accept, Reject, Request Changes, Suggest Date, Comment)
-router.post('/accounts/:partnerId/collaborations/:collabId/respond', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/accounts/:partnerId/collaborations/:collabId/respond', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId, collabId } = req.params;
-    const { partner } = assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
+    const { partner } = await assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
 
-    const collab = db.prepare(`
+    const collab = await adapter.queryOne(`
       SELECT * FROM partner_collaborations WHERE id = ? AND partner_id = ?
-    `).get(collabId, partnerId) as any;
+    `, [collabId, partnerId]) as any;
 
     if (!collab) {
       return res.status(404).json({ error: 'Collaboration proposal not found' });
@@ -975,7 +976,7 @@ router.post('/accounts/:partnerId/collaborations/:collabId/respond', requireAuth
 
     const today = new Date().toISOString().split('T')[0];
 
-    db.transaction(() => {
+    await adapter.transaction(async (tx) => {
       if (action === 'accept') {
         if (partner.verification_status !== 'Verified') {
           throw Object.assign(new Error('Your business must be Verified before accepting event collaborations.'), { status: 403 });
@@ -985,7 +986,7 @@ router.post('/accounts/:partnerId/collaborations/:collabId/respond', requireAuth
       } else if (action === 'reject') {
         nextStatus = 'Rejected';
         timeline.push({ step: 'Declined by Partner', date: today, completed: true });
-        db.prepare(`DELETE FROM venue_availability WHERE collaboration_id = ? AND status = 'proposed'`).run(collabId);
+        await tx.execute(`DELETE FROM venue_availability WHERE collaboration_id = ? AND status = 'proposed'`, [collabId]);
       } else if (action === 'request_changes') {
         nextStatus = 'Negotiation';
         timeline.push({ step: 'Partner Requested Changes', date: today, completed: true });
@@ -997,21 +998,19 @@ router.post('/accounts/:partnerId/collaborations/:collabId/respond', requireAuth
         timeline.push({ step: `Alternate Date Suggested (${suggested_date})`, date: today, completed: true });
       }
 
-      db.prepare(`
+      await tx.execute(`
         UPDATE partner_collaborations
         SET status = ?,
             suggested_date = COALESCE(?, suggested_date),
             suggested_time = COALESCE(?, suggested_time),
             timeline_json = ?,
-            updated_at = datetime('now')
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(
-        nextStatus,
+      `, [nextStatus,
         suggested_date || null,
         suggested_time || null,
         JSON.stringify(timeline),
-        collabId
-      );
+        collabId]);
 
       const commentText = message || (
         action === 'accept' ? 'Partner accepted the collaboration proposal.' :
@@ -1021,16 +1020,16 @@ router.post('/accounts/:partnerId/collaborations/:collabId/respond', requireAuth
       );
 
       const commentId = 'cc_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
-      db.prepare(`
+      await tx.execute(`
         INSERT INTO collaboration_comments (id, collaboration_id, partner_id, user_id, sender_name, sender_role, message, action_type)
         VALUES (?, ?, ?, ?, ?, 'partner', ?, ?)
-      `).run(commentId, collabId, partnerId, req.user!.id, req.user!.full_name, commentText, action);
+      `, [commentId, collabId, partnerId, req.user!.id, req.user!.full_name, commentText, action]);
 
-      logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, `COLLABORATION_${action.toUpperCase()}`, 'collaboration', collabId, { nextStatus, suggested_date });
-    })();
+      await logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, `COLLABORATION_${action.toUpperCase()}`, 'collaboration', collabId, { nextStatus, suggested_date });
+    });
 
-    const updated = db.prepare('SELECT * FROM partner_collaborations WHERE id = ?').get(collabId) as any;
-    updated.comments = db.prepare('SELECT * FROM collaboration_comments WHERE collaboration_id = ? ORDER BY created_at ASC').all(collabId);
+    const updated = await adapter.queryOne('SELECT * FROM partner_collaborations WHERE id = ?', [collabId]) as any;
+    updated.comments = await adapter.query('SELECT * FROM collaboration_comments WHERE collaboration_id = ? ORDER BY created_at ASC', [collabId]);
 
     return res.json({ success: true, collaboration: updated });
   } catch (err: any) {
@@ -1039,13 +1038,14 @@ router.post('/accounts/:partnerId/collaborations/:collabId/respond', requireAuth
 });
 
 // Partner Hosted & Approved Events (Strictly scoped & no PII)
-router.get('/accounts/:partnerId/events', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/events', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
 
-    const events = db.prepare(`
-      SELECT 
+    const events = await adapter.query(`
+      SELECT
         e.id, e.title, e.category, e.event_date, e.event_time, e.description,
         e.seats_total, e.seats_booked, e.status, e.image_url, e.partner_operational_notes,
         v.id as venue_id, v.name as venue_name, v.address as venue_address, c.name as city_name,
@@ -1059,7 +1059,7 @@ router.get('/accounts/:partnerId/events', requireAuth, (req: AuthRequest, res: R
       LEFT JOIN partner_collaborations pc ON pc.event_id = e.id
       WHERE v.partner_id = ?
       ORDER BY e.created_at DESC
-    `).all(partnerId) as any[];
+    `, [partnerId]) as any[];
 
     for (const ev of events) {
       try {
@@ -1086,22 +1086,23 @@ router.get('/accounts/:partnerId/events', requireAuth, (req: AuthRequest, res: R
 });
 
 // Partner Operational Notes Update (Authorized partners cannot alter publication status or capacity)
-router.patch('/accounts/:partnerId/events/:eventId/operations', requireAuth, (req: AuthRequest, res: Response) => {
+router.patch('/accounts/:partnerId/events/:eventId/operations', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId, eventId } = req.params;
-    assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
+    await assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
 
     const { partner_operational_notes } = req.body;
-    const event = db.prepare(`
+    const event = await adapter.queryOne(`
       SELECT e.* FROM events e JOIN venues v ON e.venue_id = v.id WHERE e.id = ? AND v.partner_id = ?
-    `).get(eventId, partnerId);
+    `, [eventId, partnerId]);
 
     if (!event) {
       return res.status(404).json({ error: 'Event not found at your venues' });
     }
 
-    db.prepare(`UPDATE events SET partner_operational_notes = ? WHERE id = ?`).run(partner_operational_notes || '', eventId);
-    logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'EVENT_OPERATIONAL_NOTES_UPDATED', 'event', eventId);
+    await adapter.execute(`UPDATE events SET partner_operational_notes = ? WHERE id = ?`, [partner_operational_notes || '', eventId]);
+    await logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'EVENT_OPERATIONAL_NOTES_UPDATED', 'event', eventId);
 
     return res.json({ success: true, message: 'Operational logistics updated.' });
   } catch (err: any) {
@@ -1113,13 +1114,14 @@ router.patch('/accounts/:partnerId/events/:eventId/operations', requireAuth, (re
 // OFFERS, CAMPAIGNS & QR COUPON REDEMPTION
 // =========================================================================
 
-router.get('/accounts/:partnerId/campaigns', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/campaigns', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
 
-    const campaigns = db.prepare(`
-      SELECT 
+    const campaigns = await adapter.query(`
+      SELECT
         c.*,
         v.name as venue_name,
         e.title as eligible_event_title,
@@ -1130,7 +1132,7 @@ router.get('/accounts/:partnerId/campaigns', requireAuth, (req: AuthRequest, res
       LEFT JOIN events e ON c.eligible_event_id = e.id
       WHERE c.partner_id = ? OR v.partner_id = ?
       ORDER BY c.created_at DESC
-    `).all(partnerId, partnerId);
+    `, [partnerId, partnerId]);
 
     return res.json({ success: true, campaigns });
   } catch (err: any) {
@@ -1138,10 +1140,11 @@ router.get('/accounts/:partnerId/campaigns', requireAuth, (req: AuthRequest, res
   }
 });
 
-router.post('/accounts/:partnerId/campaigns', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/accounts/:partnerId/campaigns', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    const { partner } = assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
+    const { partner } = await assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
 
     const {
       venue_id,
@@ -1166,13 +1169,13 @@ router.post('/accounts/:partnerId/campaigns', requireAuth, (req: AuthRequest, re
       return res.status(400).json({ error: 'Venue, code, title, discount value, and validity end date are required' });
     }
 
-    const venue = db.prepare('SELECT id FROM venues WHERE id = ? AND partner_id = ?').get(venue_id, partnerId);
+    const venue = await adapter.queryOne('SELECT id FROM venues WHERE id = ? AND partner_id = ?', [venue_id, partnerId]);
     if (!venue) {
       return res.status(403).json({ error: 'Selected venue does not belong to this partner account' });
     }
 
     const cleanCode = code.toUpperCase().trim();
-    const existingCode = db.prepare('SELECT id FROM coupons WHERE code = ?').get(cleanCode);
+    const existingCode = await adapter.queryOne('SELECT id FROM coupons WHERE code = ?', [cleanCode]);
     if (existingCode) {
       return res.status(409).json({ error: `Coupon code ${cleanCode} already exists. Please use a unique code.` });
     }
@@ -1183,15 +1186,14 @@ router.post('/accounts/:partnerId/campaigns', requireAuth, (req: AuthRequest, re
     const status = isAdmin ? 'active' : 'paused';
     const campaignId = 'cpn_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
 
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO coupons (
         id, venue_id, partner_id, code, title, description, discount_type, discount_value,
         offer_category, min_purchase, valid_from, valid_until, max_redemptions,
         eligible_event_id, eligible_audience, terms_conditions, image_url, status, approval_status, created_by
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      campaignId,
+    `, [campaignId,
       venue_id,
       partnerId,
       cleanCode,
@@ -1210,12 +1212,11 @@ router.post('/accounts/:partnerId/campaigns', requireAuth, (req: AuthRequest, re
       image_url || null,
       status,
       approvalStatus,
-      req.user!.id
-    );
+      req.user!.id]);
 
-    logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'CAMPAIGN_CREATED', 'coupon', campaignId, { code: cleanCode, approvalStatus });
+    await logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'CAMPAIGN_CREATED', 'coupon', campaignId, { code: cleanCode, approvalStatus });
 
-    const campaign = db.prepare('SELECT * FROM coupons WHERE id = ?').get(campaignId);
+    const campaign = await adapter.queryOne('SELECT * FROM coupons WHERE id = ?', [campaignId]);
     return res.status(201).json({
       success: true,
       campaign,
@@ -1227,12 +1228,13 @@ router.post('/accounts/:partnerId/campaigns', requireAuth, (req: AuthRequest, re
 });
 
 // Partner edits Draft or toggles Pause on already Approved campaign
-router.patch('/accounts/:partnerId/campaigns/:campaignId', requireAuth, (req: AuthRequest, res: Response) => {
+router.patch('/accounts/:partnerId/campaigns/:campaignId', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId, campaignId } = req.params;
-    assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
+    await assertPartnerAccess(req.user!, partnerId, ['owner', 'manager']);
 
-    const campaign = db.prepare('SELECT * FROM coupons WHERE id = ? AND partner_id = ?').get(campaignId, partnerId) as any;
+    const campaign = await adapter.queryOne('SELECT * FROM coupons WHERE id = ? AND partner_id = ?', [campaignId, partnerId]) as any;
     if (!campaign) {
       return res.status(404).json({ error: 'Campaign not found under this partner account' });
     }
@@ -1243,30 +1245,30 @@ router.patch('/accounts/:partnerId/campaigns/:campaignId', requireAuth, (req: Au
       if (!['Draft', 'Rejected'].includes(campaign.approval_status)) {
         return res.status(400).json({ error: 'Only Draft or Rejected campaigns can be submitted for review' });
       }
-      db.prepare(`UPDATE coupons SET approval_status = 'Submitted' WHERE id = ?`).run(campaignId);
+      await adapter.execute(`UPDATE coupons SET approval_status = 'Submitted' WHERE id = ?`, [campaignId]);
     } else if (action === 'pause') {
       if (campaign.approval_status !== 'Active' && campaign.approval_status !== 'Approved') {
         return res.status(400).json({ error: 'Only approved campaigns can be paused' });
       }
-      db.prepare(`UPDATE coupons SET status = 'paused', approval_status = 'Paused' WHERE id = ?`).run(campaignId);
+      await adapter.execute(`UPDATE coupons SET status = 'paused', approval_status = 'Paused' WHERE id = ?`, [campaignId]);
     } else if (action === 'resume') {
       if (campaign.approval_status !== 'Paused') {
         return res.status(400).json({ error: 'Only paused previously-approved campaigns can be resumed' });
       }
-      db.prepare(`UPDATE coupons SET status = 'active', approval_status = 'Active' WHERE id = ?`).run(campaignId);
+      await adapter.execute(`UPDATE coupons SET status = 'active', approval_status = 'Active' WHERE id = ?`, [campaignId]);
     } else {
-      db.prepare(`
+      await adapter.execute(`
         UPDATE coupons
         SET title = COALESCE(?, title),
             description = COALESCE(?, description),
             max_redemptions = COALESCE(?, max_redemptions),
             valid_until = COALESCE(?, valid_until)
         WHERE id = ?
-      `).run(title, description, max_redemptions ? Number(max_redemptions) : null, valid_until, campaignId);
+      `, [title, description, max_redemptions ? Number(max_redemptions) : null, valid_until, campaignId]);
     }
 
-    logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'CAMPAIGN_UPDATED', 'coupon', campaignId, { action });
-    const updated = db.prepare('SELECT * FROM coupons WHERE id = ?').get(campaignId);
+    await logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'CAMPAIGN_UPDATED', 'coupon', campaignId, { action });
+    const updated = await adapter.queryOne('SELECT * FROM coupons WHERE id = ?', [campaignId]);
     return res.json({ success: true, campaign: updated });
   } catch (err: any) {
     return handlePartnerErr(res, err);
@@ -1274,27 +1276,28 @@ router.patch('/accounts/:partnerId/campaigns/:campaignId', requireAuth, (req: Au
 });
 
 // Pre-flight Verification of Coupon Eligibility (BEFORE Redemption!)
-router.post('/coupons/verify', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/coupons/verify', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { coupon_code, venue_id, pass_code, order_amount } = req.body;
     if (!coupon_code) {
       return res.status(400).json({ valid: false, error: 'Coupon code is required' });
     }
 
-    const coupon = db.prepare(`
+    const coupon = await adapter.queryOne(`
       SELECT c.*, v.name as venue_name, p.business_name as partner_name
       FROM coupons c
       JOIN venues v ON c.venue_id = v.id
       LEFT JOIN partner_accounts p ON c.partner_id = p.id
       WHERE c.code = ?
-    `).get(coupon_code.toUpperCase().trim()) as any;
+    `, [coupon_code.toUpperCase().trim()]) as any;
 
     if (!coupon) {
       return res.status(404).json({ valid: false, error: 'Coupon code not found' });
     }
 
     if (coupon.partner_id && !isAdminOrPartnerManager(req.user!.role)) {
-      assertPartnerAccess(req.user!, coupon.partner_id);
+      await assertPartnerAccess(req.user!, coupon.partner_id);
     }
 
     if (venue_id && coupon.venue_id !== venue_id) {
@@ -1323,12 +1326,12 @@ router.post('/coupons/verify', requireAuth, (req: AuthRequest, res: Response) =>
 
     if (pass_code && pass_code.trim()) {
       const cleanPass = pass_code.trim().toUpperCase();
-      const dup = db.prepare(`SELECT id FROM coupon_redemptions WHERE coupon_id = ? AND pass_code = ?`).get(coupon.id, cleanPass);
+      const dup = await adapter.queryOne(`SELECT id FROM coupon_redemptions WHERE coupon_id = ? AND pass_code = ?`, [coupon.id, cleanPass]);
       if (dup) {
         return res.status(409).json({ valid: false, error: `Pass ${cleanPass} has already redeemed coupon ${coupon.code}.` });
       }
       if (coupon.eligible_event_id) {
-        const reg = db.prepare(`SELECT * FROM event_registrations WHERE pass_code = ?`).get(cleanPass) as any;
+        const reg = await adapter.queryOne(`SELECT * FROM event_registrations WHERE pass_code = ?`, [cleanPass]) as any;
         if (!reg || reg.event_id !== coupon.eligible_event_id || reg.checkin_status === 'cancelled') {
           return res.status(400).json({ valid: false, error: `Pass ${cleanPass} is not eligible for this event-specific campaign.` });
         }
@@ -1357,7 +1360,8 @@ router.post('/coupons/verify', requireAuth, (req: AuthRequest, res: Response) =>
 });
 
 // 6. POST QR Coupon Redemption Scanner (Atomic, Validated, Duplicate-Safe)
-router.post('/coupons/redeem', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/coupons/redeem', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { coupon_code, venue_id, pass_code, order_amount, notes } = req.body;
     const userId = req.user!.id;
@@ -1366,17 +1370,17 @@ router.post('/coupons/redeem', requireAuth, (req: AuthRequest, res: Response) =>
       return res.status(400).json({ error: 'Coupon code is required' });
     }
 
-    const redeemTransaction = db.transaction(() => {
-      const coupon = db.prepare(`
+    const result = await adapter.transaction(async (tx) => {
+      const coupon = await tx.queryOne(`
         SELECT * FROM coupons WHERE code = ?
-      `).get(coupon_code.toUpperCase().trim()) as any;
+      `, [coupon_code.toUpperCase().trim()]) as any;
 
       if (!coupon) {
         throw new Error('Invalid coupon code');
       }
 
       if (coupon.partner_id && !isAdminOrPartnerManager(req.user!.role)) {
-        assertPartnerAccess(req.user!, coupon.partner_id);
+        await assertPartnerAccess(req.user!, coupon.partner_id);
       }
 
       if (venue_id && coupon.venue_id !== venue_id) {
@@ -1403,12 +1407,12 @@ router.post('/coupons/redeem', requireAuth, (req: AuthRequest, res: Response) =>
 
       const cleanPass = pass_code && pass_code.trim() ? pass_code.trim().toUpperCase() : null;
       if (cleanPass) {
-        const dup = db.prepare(`SELECT id FROM coupon_redemptions WHERE coupon_id = ? AND pass_code = ?`).get(coupon.id, cleanPass);
+        const dup = await tx.queryOne(`SELECT id FROM coupon_redemptions WHERE coupon_id = ? AND pass_code = ?`, [coupon.id, cleanPass]);
         if (dup) {
           throw new Error(`Duplicate redemption blocked: Pass ${cleanPass} already redeemed this coupon.`);
         }
         if (coupon.eligible_event_id) {
-          const reg = db.prepare(`SELECT * FROM event_registrations WHERE pass_code = ?`).get(cleanPass) as any;
+          const reg = await tx.queryOne(`SELECT * FROM event_registrations WHERE pass_code = ?`, [cleanPass]) as any;
           if (!reg || reg.event_id !== coupon.eligible_event_id || reg.checkin_status === 'cancelled') {
             throw new Error(`Pass ${cleanPass} is not valid for the eligible event.`);
           }
@@ -1418,13 +1422,12 @@ router.post('/coupons/redeem', requireAuth, (req: AuthRequest, res: Response) =>
       const redemptionId = 'red_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
       const purchaseVerified = numericAmount !== null && numericAmount > 0 ? 1 : 0;
 
-      db.prepare(`
+      await tx.execute(`
         INSERT INTO coupon_redemptions (
           id, coupon_id, venue_id, partner_id, event_id, user_id, verified_by_user_id, pass_code, order_amount, purchase_verified, notes
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        redemptionId,
+      `, [redemptionId,
         coupon.id,
         coupon.venue_id,
         coupon.partner_id || null,
@@ -1434,15 +1437,14 @@ router.post('/coupons/redeem', requireAuth, (req: AuthRequest, res: Response) =>
         cleanPass,
         numericAmount,
         purchaseVerified,
-        notes || 'Verified at partner cashier terminal'
-      );
+        notes || 'Verified at partner cashier terminal']);
 
-      db.prepare(`
+      await tx.execute(`
         UPDATE coupons SET actual_redemptions = actual_redemptions + 1 WHERE id = ?
-      `).run(coupon.id);
+      `, [coupon.id]);
 
       if (coupon.partner_id) {
-        logPartnerAudit(coupon.partner_id, userId, req.user!.full_name, 'COUPON_REDEEMED', 'coupon_redemption', redemptionId, {
+        await logPartnerAudit(coupon.partner_id, userId, req.user!.full_name, 'COUPON_REDEEMED', 'coupon_redemption', redemptionId, {
           code: coupon.code,
           pass_code: cleanPass,
           order_amount: numericAmount,
@@ -1459,19 +1461,18 @@ router.post('/coupons/redeem', requireAuth, (req: AuthRequest, res: Response) =>
         redeemedAt: new Date().toISOString(),
       };
     });
-
-    const result = redeemTransaction();
     return res.json({ message: 'Coupon verified and redeemed successfully', result });
   } catch (err: any) {
     return res.status(err.status || 400).json({ error: err.message });
   }
 });
 
-router.get('/accounts/:partnerId/redemptions', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/redemptions', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
-    const analytics = getPartnerAnalytics(partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
+    const analytics = await getPartnerAnalytics(partnerId);
     return res.json({ success: true, redemptions: analytics.redemptionsHistory });
   } catch (err: any) {
     return handlePartnerErr(res, err);
@@ -1482,29 +1483,31 @@ router.get('/accounts/:partnerId/redemptions', requireAuth, (req: AuthRequest, r
 // PARTNER ANALYTICS & CSV EXPORTS
 // =========================================================================
 
-router.get('/accounts/:partnerId/analytics', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/analytics', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
 
     const { range, from, to, venueId } = req.query as { range?: string; from?: string; to?: string; venueId?: string };
-    const analytics = getPartnerAnalytics(partnerId, { range, from, to, venueId });
+    const analytics = await getPartnerAnalytics(partnerId, { range, from, to, venueId });
     return res.json({ success: true, ...analytics });
   } catch (err: any) {
     return handlePartnerErr(res, err);
   }
 });
 
-router.get('/accounts/:partnerId/reports/export', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/reports/export', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
 
     const { type = 'events', range, from, to } = req.query as { type?: 'events' | 'redemptions' | 'campaigns'; range?: string; from?: string; to?: string };
     const reportType = ['events', 'redemptions', 'campaigns'].includes(type) ? type : 'events';
-    const { filename, csv } = buildCsvExport(partnerId, reportType, { range, from, to });
+    const { filename, csv } = await buildCsvExport(partnerId, reportType, { range, from, to });
 
-    logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'REPORT_EXPORTED', 'report', reportType);
+    await logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, 'REPORT_EXPORTED', 'report', reportType);
     return res.json({ success: true, filename, csv });
   } catch (err: any) {
     return handlePartnerErr(res, err);
@@ -1515,19 +1518,20 @@ router.get('/accounts/:partnerId/reports/export', requireAuth, (req: AuthRequest
 // PARTNER COMMUNICATION CENTER
 // =========================================================================
 
-router.get('/accounts/:partnerId/communications', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/accounts/:partnerId/communications', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
 
-    const communications = db.prepare(`
+    const communications = await adapter.query(`
       SELECT pc.*, e.title as event_title, c.event_name as collaboration_title
       FROM partner_communications pc
       LEFT JOIN events e ON pc.event_id = e.id
       LEFT JOIN partner_collaborations c ON pc.collaboration_id = c.id
       WHERE pc.partner_id = ?
       ORDER BY pc.created_at DESC
-    `).all(partnerId);
+    `, [partnerId]);
 
     return res.json({ success: true, communications });
   } catch (err: any) {
@@ -1535,10 +1539,11 @@ router.get('/accounts/:partnerId/communications', requireAuth, (req: AuthRequest
   }
 });
 
-router.post('/accounts/:partnerId/communications', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/accounts/:partnerId/communications', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
 
     const { subject, message, event_id, collaboration_id, type } = req.body;
     if (!subject || !message) {
@@ -1546,7 +1551,7 @@ router.post('/accounts/:partnerId/communications', requireAuth, (req: AuthReques
     }
 
     const senderRole = isAdminOrPartnerManager(req.user!.role) ? 'coordinator' : 'partner';
-    const msgId = notifyPartner(
+    const msgId = await notifyPartner(
       partnerId,
       type || 'coordinator_message',
       subject.trim(),
@@ -1558,18 +1563,19 @@ router.post('/accounts/:partnerId/communications', requireAuth, (req: AuthReques
       req.user!.id
     );
 
-    const created = db.prepare('SELECT * FROM partner_communications WHERE id = ?').get(msgId);
+    const created = await adapter.queryOne('SELECT * FROM partner_communications WHERE id = ?', [msgId]);
     return res.status(201).json({ success: true, communication: created });
   } catch (err: any) {
     return handlePartnerErr(res, err);
   }
 });
 
-router.patch('/accounts/:partnerId/communications/:msgId/read', requireAuth, (req: AuthRequest, res: Response) => {
+router.patch('/accounts/:partnerId/communications/:msgId/read', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     const { partnerId, msgId } = req.params;
-    assertPartnerAccess(req.user!, partnerId);
-    db.prepare(`UPDATE partner_communications SET is_read = 1 WHERE id = ? AND partner_id = ?`).run(msgId, partnerId);
+    await assertPartnerAccess(req.user!, partnerId);
+    await adapter.execute(`UPDATE partner_communications SET is_read = 1 WHERE id = ? AND partner_id = ?`, [msgId, partnerId]);
     return res.json({ success: true });
   } catch (err: any) {
     return handlePartnerErr(res, err);
@@ -1580,13 +1586,14 @@ router.patch('/accounts/:partnerId/communications/:msgId/read', requireAuth, (re
 // ADMIN PARTNER MANAGEMENT ENDPOINTS
 // =========================================================================
 
-router.get('/admin/overview', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/admin/overview', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     if (!requirePartnerAdmin(req, res)) return;
 
     const { status, city, category, search } = req.query as Record<string, string>;
     let query = `
-      SELECT 
+      SELECT
         p.*,
         (SELECT COUNT(*) FROM venues WHERE partner_id = p.id) as venues_count,
         (SELECT COUNT(*) FROM partner_collaborations WHERE partner_id = p.id) as collaborations_count,
@@ -1613,26 +1620,26 @@ router.get('/admin/overview', requireAuth, (req: AuthRequest, res: Response) => 
     }
     query += ` ORDER BY p.verification_status = 'Submitted' DESC, p.created_at DESC`;
 
-    const partners = db.prepare(query).all(...params);
+    const partners = await adapter.query(query, params);
 
-    const pendingCampaigns = db.prepare(`
+    const pendingCampaigns = await adapter.query(`
       SELECT c.*, p.business_name as partner_name, v.name as venue_name
       FROM coupons c
       JOIN venues v ON c.venue_id = v.id
       LEFT JOIN partner_accounts p ON c.partner_id = p.id
       WHERE c.approval_status IN ('Submitted', 'Draft')
       ORDER BY c.created_at DESC
-    `).all();
+    `);
 
-    const collaborations = db.prepare(`
+    const collaborations = await adapter.query(`
       SELECT pc.*, p.business_name as partner_name, v.name as venue_name
       FROM partner_collaborations pc
       JOIN partner_accounts p ON pc.partner_id = p.id
       JOIN venues v ON pc.venue_id = v.id
       ORDER BY pc.updated_at DESC
-    `).all();
+    `);
 
-    const publicProposals = db.prepare(`SELECT * FROM partner_proposals ORDER BY created_at DESC LIMIT 30`).all();
+    const publicProposals = await adapter.query(`SELECT * FROM partner_proposals ORDER BY created_at DESC LIMIT 30`);
 
     return res.json({
       success: true,
@@ -1646,19 +1653,20 @@ router.get('/admin/overview', requireAuth, (req: AuthRequest, res: Response) => 
   }
 });
 
-router.get('/admin/:partnerId/details', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/admin/:partnerId/details', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     if (!requirePartnerAdmin(req, res)) return;
     const { partnerId } = req.params;
 
-    const partner = db.prepare('SELECT * FROM partner_accounts WHERE id = ?').get(partnerId);
+    const partner = await adapter.queryOne('SELECT * FROM partner_accounts WHERE id = ?', [partnerId]);
     if (!partner) return res.status(404).json({ error: 'Partner account not found' });
 
-    const venues = db.prepare('SELECT v.*, c.name as city_name FROM venues v JOIN cities c ON v.city_id = c.id WHERE v.partner_id = ?').all(partnerId);
-    const collaborations = db.prepare('SELECT pc.*, v.name as venue_name FROM partner_collaborations pc JOIN venues v ON pc.venue_id = v.id WHERE pc.partner_id = ? ORDER BY pc.created_at DESC').all(partnerId);
-    const campaigns = db.prepare('SELECT c.*, v.name as venue_name FROM coupons c JOIN venues v ON c.venue_id = v.id WHERE c.partner_id = ? ORDER BY c.created_at DESC').all(partnerId);
-    const analytics = getPartnerAnalytics(partnerId);
-    const auditLogs = db.prepare('SELECT * FROM partner_audit_logs WHERE partner_id = ? ORDER BY created_at DESC LIMIT 40').all(partnerId);
+    const venues = await adapter.query('SELECT v.*, c.name as city_name FROM venues v JOIN cities c ON v.city_id = c.id WHERE v.partner_id = ?', [partnerId]);
+    const collaborations = await adapter.query('SELECT pc.*, v.name as venue_name FROM partner_collaborations pc JOIN venues v ON pc.venue_id = v.id WHERE pc.partner_id = ? ORDER BY pc.created_at DESC', [partnerId]);
+    const campaigns = await adapter.query('SELECT c.*, v.name as venue_name FROM coupons c JOIN venues v ON c.venue_id = v.id WHERE c.partner_id = ? ORDER BY c.created_at DESC', [partnerId]);
+    const analytics = await getPartnerAnalytics(partnerId);
+    const auditLogs = await adapter.query('SELECT * FROM partner_audit_logs WHERE partner_id = ? ORDER BY created_at DESC LIMIT 40', [partnerId]);
 
     return res.json({
       success: true,
@@ -1674,7 +1682,8 @@ router.get('/admin/:partnerId/details', requireAuth, (req: AuthRequest, res: Res
   }
 });
 
-router.post('/admin/:partnerId/verify', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/admin/:partnerId/verify', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     if (!requirePartnerAdmin(req, res)) return;
     const { partnerId } = req.params;
@@ -1685,28 +1694,28 @@ router.post('/admin/:partnerId/verify', requireAuth, (req: AuthRequest, res: Res
       return res.status(400).json({ error: 'Invalid verification status' });
     }
 
-    const partner = db.prepare('SELECT * FROM partner_accounts WHERE id = ?').get(partnerId) as any;
+    const partner = await adapter.queryOne('SELECT * FROM partner_accounts WHERE id = ?', [partnerId]) as any;
     if (!partner) return res.status(404).json({ error: 'Partner not found' });
 
-    db.transaction(() => {
-      db.prepare(`
+    await adapter.transaction(async (tx) => {
+      await tx.execute(`
         UPDATE partner_accounts
         SET verification_status = ?,
             verification_notes = COALESCE(?, verification_notes),
             partnership_tier = COALESCE(?, partnership_tier),
-            partnership_start_date = CASE WHEN ? = 'Verified' AND partnership_start_date IS NULL THEN date('now') ELSE partnership_start_date END,
-            updated_at = datetime('now')
+            partnership_start_date = CASE WHEN ? = 'Verified' AND partnership_start_date IS NULL THEN CURRENT_DATE ELSE partnership_start_date END,
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(status, notes || null, partnership_tier || null, status, partnerId);
+      `, [status, notes || null, partnership_tier || null, status, partnerId]);
 
       // Update venue verification flag & owner role upon approval
-      db.prepare(`UPDATE venues SET is_verified = ? WHERE partner_id = ?`).run(status === 'Verified' ? 1 : 0, partnerId);
+      await tx.execute(`UPDATE venues SET is_verified = ? WHERE partner_id = ?`, [status === 'Verified' ? 1 : 0, partnerId]);
       if (status === 'Verified') {
-        db.prepare(`UPDATE users SET role = 'venue_partner' WHERE id = ? AND role = 'user'`).run(partner.owner_user_id);
+        await tx.execute(`UPDATE users SET role = 'venue_partner' WHERE id = ? AND role = 'user'`, [partner.owner_user_id]);
       }
 
-      logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, `PARTNER_STATUS_${status.toUpperCase().replace(/\s+/g, '_')}`, 'partner_account', partnerId, { notes });
-      recordAuditLog({
+      await logPartnerAudit(partnerId, req.user!.id, req.user!.full_name, `PARTNER_STATUS_${status.toUpperCase().replace(/\s+/g, '_')}`, 'partner_account', partnerId, { notes });
+      await recordAuditLog({
         actorId: req.user!.id,
         actorName: req.user!.full_name,
         actorRole: req.user!.role,
@@ -1716,7 +1725,7 @@ router.post('/admin/:partnerId/verify', requireAuth, (req: AuthRequest, res: Res
         beforeData: { verification_status: partner.verification_status },
         afterData: { verification_status: status, notes },
       });
-      notifyPartner(
+      await notifyPartner(
         partnerId,
         'verification_update',
         `Partner Account Status: ${status}`,
@@ -1724,9 +1733,9 @@ router.post('/admin/:partnerId/verify', requireAuth, (req: AuthRequest, res: Res
         req.user!.full_name,
         'admin'
       );
-    })();
+    });
 
-    const updated = db.prepare('SELECT * FROM partner_accounts WHERE id = ?').get(partnerId);
+    const updated = await adapter.queryOne('SELECT * FROM partner_accounts WHERE id = ?', [partnerId]);
     return res.json({ success: true, partner: updated });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -1734,7 +1743,8 @@ router.post('/admin/:partnerId/verify', requireAuth, (req: AuthRequest, res: Res
 });
 
 // Admin creates Collaboration Proposal to a Partner Venue
-router.post('/admin/collaborations', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/admin/collaborations', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     if (!requirePartnerAdmin(req, res)) return;
 
@@ -1760,10 +1770,10 @@ router.post('/admin/collaborations', requireAuth, (req: AuthRequest, res: Respon
     }
 
     // Check venue availability conflicts (prevents double-booking / proposing over unavailable dates)
-    const conflict = db.prepare(`
+    const conflict = await adapter.queryOne(`
       SELECT * FROM venue_availability
       WHERE venue_id = ? AND date = ? AND status IN ('booked', 'unavailable')
-    `).get(venue_id, proposed_date) as any;
+    `, [venue_id, proposed_date]) as any;
 
     if (conflict) {
       return res.status(409).json({
@@ -1775,8 +1785,8 @@ router.post('/admin/collaborations', requireAuth, (req: AuthRequest, res: Respon
     const today = new Date().toISOString().split('T')[0];
     const timeline = JSON.stringify([{ step: 'Proposal Sent by STROOM', date: today, completed: true }]);
 
-    db.transaction(() => {
-      db.prepare(`
+    await adapter.transaction(async (tx) => {
+      await tx.execute(`
         INSERT INTO partner_collaborations (
           id, partner_id, venue_id, initiated_by, organizer_user_id, organizer_name,
           event_name, event_category, description, proposed_date, proposed_time,
@@ -1785,8 +1795,7 @@ router.post('/admin/collaborations', requireAuth, (req: AuthRequest, res: Respon
           special_requirements, status, timeline_json
         )
         VALUES (?, ?, ?, 'admin', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Proposal Sent', ?)
-      `).run(
-        collabId,
+      `, [collabId,
         partner_id,
         venue_id,
         req.user!.id,
@@ -1803,18 +1812,18 @@ router.post('/admin/collaborations', requireAuth, (req: AuthRequest, res: Respon
         marketing_plan || 'Featured in STROOM Discover feed & city circles.',
         commercial_arrangement || 'Mutually agreed partnership terms.',
         special_requirements || '',
-        timeline
-      );
+        timeline]);
 
       // Mark proposed slot on venue calendar
       const vaId = 'va_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
-      db.prepare(`
-        INSERT OR REPLACE INTO venue_availability (id, venue_id, partner_id, date, time_slot, status, collaboration_id, notes)
+      await tx.execute(`
+        INSERT INTO venue_availability (id, venue_id, partner_id, date, time_slot, status, collaboration_id, notes)
         VALUES (?, ?, ?, ?, 'evening', 'proposed', ?, ?)
-      `).run(vaId, venue_id, partner_id, proposed_date, collabId, `Proposed: ${event_name}`);
+        ON CONFLICT (venue_id, date, time_slot) DO UPDATE SET status = excluded.status, collaboration_id = excluded.collaboration_id, notes = excluded.notes
+      `, [vaId, venue_id, partner_id, proposed_date, collabId, `Proposed: ${event_name}`]);
 
-      logPartnerAudit(partner_id, req.user!.id, req.user!.full_name, 'COLLABORATION_PROPOSAL_SENT', 'collaboration', collabId, { event_name, proposed_date });
-      notifyPartner(
+      await logPartnerAudit(partner_id, req.user!.id, req.user!.full_name, 'COLLABORATION_PROPOSAL_SENT', 'collaboration', collabId, { event_name, proposed_date });
+      await notifyPartner(
         partner_id,
         'announcement',
         `New Event Collaboration Proposal: ${event_name}`,
@@ -1824,9 +1833,9 @@ router.post('/admin/collaborations', requireAuth, (req: AuthRequest, res: Respon
         null,
         collabId
       );
-    })();
+    });
 
-    const collaboration = db.prepare('SELECT * FROM partner_collaborations WHERE id = ?').get(collabId);
+    const collaboration = await adapter.queryOne('SELECT * FROM partner_collaborations WHERE id = ?', [collabId]);
     return res.status(201).json({ success: true, collaboration });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -1834,17 +1843,18 @@ router.post('/admin/collaborations', requireAuth, (req: AuthRequest, res: Respon
 });
 
 // Admin confirms an Approved collaboration & publishes linked Event
-router.post('/admin/collaborations/:collabId/confirm', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/admin/collaborations/:collabId/confirm', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     if (!requirePartnerAdmin(req, res)) return;
     const { collabId } = req.params;
 
-    const collab = db.prepare(`
+    const collab = await adapter.queryOne(`
       SELECT pc.*, v.city_id
       FROM partner_collaborations pc
       JOIN venues v ON pc.venue_id = v.id
       WHERE pc.id = ?
-    `).get(collabId) as any;
+    `, [collabId]) as any;
 
     if (!collab) return res.status(404).json({ error: 'Collaboration not found' });
     if (collab.status === 'Rejected' || collab.status === 'Cancelled') {
@@ -1865,17 +1875,16 @@ router.post('/admin/collaborations/:collabId/confirm', requireAuth, (req: AuthRe
 
     let eventId = collab.event_id;
 
-    db.transaction(() => {
+    await adapter.transaction(async (tx) => {
       if (!eventId) {
         eventId = 'evt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
-        db.prepare(`
+        await tx.execute(`
           INSERT INTO events (
             id, city_id, venue_id, title, category, event_date, event_time, description,
             seats_total, seats_booked, entry_fee, status, is_flagship, image_url, created_by
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'Free Entry', 'published', 0, ?, ?)
-        `).run(
-          eventId,
+        `, [eventId,
           collab.city_id,
           collab.venue_id,
           collab.event_name,
@@ -1885,25 +1894,24 @@ router.post('/admin/collaborations/:collabId/confirm', requireAuth, (req: AuthRe
           collab.description || 'Official STROOM Partner Experience',
           collab.expected_attendance || 50,
           'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80',
-          req.user!.id
-        );
+          req.user!.id]);
       }
 
-      db.prepare(`
+      await tx.execute(`
         UPDATE partner_collaborations
-        SET status = 'Scheduled', event_id = ?, timeline_json = ?, updated_at = datetime('now')
+        SET status = 'Scheduled', event_id = ?, timeline_json = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(eventId, JSON.stringify(timeline), collabId);
+      `, [eventId, JSON.stringify(timeline), collabId]);
 
       // Mark venue slot booked
-      db.prepare(`
+      await tx.execute(`
         UPDATE venue_availability
         SET status = 'booked', event_id = ?, notes = ?
         WHERE collaboration_id = ?
-      `).run(eventId, `Confirmed: ${collab.event_name}`, collabId);
+      `, [eventId, `Confirmed: ${collab.event_name}`, collabId]);
 
-      logPartnerAudit(collab.partner_id, req.user!.id, req.user!.full_name, 'COLLABORATION_CONFIRMED_EVENT_CREATED', 'event', eventId, { collabId });
-      notifyPartner(
+      await logPartnerAudit(collab.partner_id, req.user!.id, req.user!.full_name, 'COLLABORATION_CONFIRMED_EVENT_CREATED', 'event', eventId, { collabId });
+      await notifyPartner(
         collab.partner_id,
         'operational_note',
         `Event Confirmed & Published: ${collab.event_name}`,
@@ -1913,9 +1921,9 @@ router.post('/admin/collaborations/:collabId/confirm', requireAuth, (req: AuthRe
         eventId,
         collabId
       );
-    })();
+    });
 
-    const updated = db.prepare('SELECT * FROM partner_collaborations WHERE id = ?').get(collabId);
+    const updated = await adapter.queryOne('SELECT * FROM partner_collaborations WHERE id = ?', [collabId]);
     return res.json({ success: true, collaboration: updated, eventId });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -1923,23 +1931,24 @@ router.post('/admin/collaborations/:collabId/confirm', requireAuth, (req: AuthRe
 });
 
 // Admin approves/rejects/pauses partner campaign
-router.post('/admin/campaigns/:campaignId/review', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/admin/campaigns/:campaignId/review', requireAuth, async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   try {
     if (!requirePartnerAdmin(req, res)) return;
     const { campaignId } = req.params;
     const { decision, notes } = req.body; // 'approve' | 'reject' | 'pause'
 
-    const coupon = db.prepare('SELECT * FROM coupons WHERE id = ?').get(campaignId) as any;
+    const coupon = await adapter.queryOne('SELECT * FROM coupons WHERE id = ?', [campaignId]) as any;
     if (!coupon) return res.status(404).json({ error: 'Campaign not found' });
 
     const newApprovalStatus = decision === 'approve' ? 'Active' : decision === 'reject' ? 'Rejected' : 'Paused';
     const newStatus = decision === 'approve' ? 'active' : 'paused';
 
-    db.prepare(`UPDATE coupons SET approval_status = ?, status = ? WHERE id = ?`).run(newApprovalStatus, newStatus, campaignId);
+    await adapter.execute(`UPDATE coupons SET approval_status = ?, status = ? WHERE id = ?`, [newApprovalStatus, newStatus, campaignId]);
 
     if (coupon.partner_id) {
-      logPartnerAudit(coupon.partner_id, req.user!.id, req.user!.full_name, `CAMPAIGN_${newApprovalStatus.toUpperCase()}`, 'coupon', campaignId, { notes });
-      notifyPartner(
+      await logPartnerAudit(coupon.partner_id, req.user!.id, req.user!.full_name, `CAMPAIGN_${newApprovalStatus.toUpperCase()}`, 'coupon', campaignId, { notes });
+      await notifyPartner(
         coupon.partner_id,
         'announcement',
         `Campaign ${newApprovalStatus}: ${coupon.code}`,
@@ -1948,7 +1957,7 @@ router.post('/admin/campaigns/:campaignId/review', requireAuth, (req: AuthReques
         'admin'
       );
     }
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1958,7 +1967,7 @@ router.post('/admin/campaigns/:campaignId/review', requireAuth, (req: AuthReques
       afterData: { code: coupon.code, approval_status: newApprovalStatus, notes },
     });
 
-    const updated = db.prepare('SELECT * FROM coupons WHERE id = ?').get(campaignId);
+    const updated = await adapter.queryOne('SELECT * FROM coupons WHERE id = ?', [campaignId]);
     return res.json({ success: true, campaign: updated });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

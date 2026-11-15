@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 import { EventRegistration } from '../types';
 import { evaluateUserAchievements, createNotification, logActivity } from '../services/memberService';
@@ -8,12 +8,13 @@ import { evaluateUserAchievements, createNotification, logActivity } from '../se
 const router = Router();
 
 // 1. GET authenticated user's digital entry passes
-router.get('/my-passes', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/my-passes', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
 
-    const passes = db.prepare(`
-      SELECT 
+    const passes = await adapter.query<EventRegistration>(`
+      SELECT
         r.*,
         e.title as event_title,
         e.event_date,
@@ -33,7 +34,7 @@ router.get('/my-passes', requireAuth, (req: AuthRequest, res: Response) => {
       JOIN users u ON r.user_id = u.id
       WHERE r.user_id = ?
       ORDER BY r.created_at DESC
-    `).all(userId) as EventRegistration[];
+    `, [userId]);
 
     return res.json({ passes });
   } catch (err: any) {
@@ -42,12 +43,13 @@ router.get('/my-passes', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // 2. GET Verify QR token (Door Scanner or attendee badge check)
-router.get('/verify/:token', (req, res) => {
+router.get('/verify/:token', async (req, res) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { token } = req.params;
 
-    const pass = db.prepare(`
-      SELECT 
+    const pass = await adapter.queryOne<EventRegistration>(`
+      SELECT
         r.*,
         e.title as event_title,
         e.event_date,
@@ -62,7 +64,7 @@ router.get('/verify/:token', (req, res) => {
       JOIN venues v ON e.venue_id = v.id
       JOIN users u ON r.user_id = u.id
       WHERE r.qr_token = ? OR r.pass_code = ?
-    `).get(token, token) as EventRegistration | undefined;
+    `, [token, token]);
 
     if (!pass) {
       return res.status(404).json({ valid: false, error: 'Invalid QR Pass or Pass Code' });
@@ -81,18 +83,19 @@ router.get('/verify/:token', (req, res) => {
 });
 
 // 3. POST Door Check-in (Checkin staff / Admin mark attendance)
-router.post('/check-in', requireAuth, requirePermission('checkin.access'), (req: AuthRequest, res: Response) => {
+router.post('/check-in', requireAuth, requirePermission('checkin.access'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { qr_token, pass_code } = req.body;
 
-    const pass = db.prepare(`
+    const pass = await adapter.queryOne<any>(`
       SELECT r.*, e.title as event_title, e.category as event_category, c.name as city_name, v.name as venue_name
       FROM event_registrations r
       JOIN events e ON r.event_id = e.id
       JOIN cities c ON e.city_id = c.id
       JOIN venues v ON e.venue_id = v.id
       WHERE r.qr_token = ? OR r.pass_code = ?
-    `).get(qr_token || '', pass_code || '') as any;
+    `, [qr_token || '', pass_code || '']);
 
     if (!pass) {
       return res.status(404).json({ error: 'Pass not found' });
@@ -119,19 +122,20 @@ router.post('/check-in', requireAuth, requirePermission('checkin.access'), (req:
       : 'Award';
 
     // Execute check-in and stamp insertion atomically
-    db.transaction(() => {
+    await adapter.transaction(async (tx) => {
       // 1. Mark pass as checked in
-      db.prepare(`
-        UPDATE event_registrations 
-        SET checkin_status = 'checked_in', checked_in_at = datetime('now'), checked_in_by = ?
+      await tx.execute(`
+        UPDATE event_registrations
+        SET checkin_status = 'checked_in', checked_in_at = CURRENT_TIMESTAMP, checked_in_by = ?
         WHERE id = ?
-      `).run(req.user!.id, pass.id);
+      `, [req.user!.id, pass.id]);
 
       // 2. Add verified attendance stamp to STROOM Passport
-      db.prepare(`
-        INSERT OR IGNORE INTO passport_stamps (id, user_id, event_id, event_title, category, city_name, venue_name, stamp_icon, verified_at, verified_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
-      `).run(
+      await tx.execute(`
+        INSERT INTO passport_stamps (id, user_id, event_id, event_title, category, city_name, venue_name, stamp_icon, verified_at, verified_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+        ON CONFLICT (user_id, event_id) DO NOTHING
+      `, [
         stampId,
         pass.user_id,
         pass.event_id,
@@ -141,29 +145,29 @@ router.post('/check-in', requireAuth, requirePermission('checkin.access'), (req:
         pass.venue_name,
         stampIcon,
         req.user!.id
-      );
+      ]);
+    });
 
-      // 3. Log activity
-      logActivity(
-        pass.user_id,
-        'event_attended',
-        `Attended: ${pass.event_title}`,
-        `Verified attendance at ${pass.venue_name} (${pass.city_name}).`,
-        pass.event_id
-      );
+    // 3. Log activity
+    await logActivity(
+      pass.user_id,
+      'event_attended',
+      `Attended: ${pass.event_title}`,
+      `Verified attendance at ${pass.venue_name} (${pass.city_name}).`,
+      pass.event_id
+    );
 
-      // 4. Send attendee notification
-      createNotification(
-        pass.user_id,
-        'checkin',
-        `Attendance Verified: ${pass.event_title}`,
-        `Welcome! You've been checked in. Your digital STROOM Passport stamp has been stamped!`,
-        { eventId: pass.event_id, passCode: pass.pass_code }
-      );
-    })();
+    // 4. Send attendee notification
+    await createNotification(
+      pass.user_id,
+      'checkin',
+      `Attendance Verified: ${pass.event_title}`,
+      `Welcome! You've been checked in. Your digital STROOM Passport stamp has been stamped!`,
+      { eventId: pass.event_id, passCode: pass.pass_code }
+    );
 
     // 5. Evaluate achievements
-    const newlyUnlocked = evaluateUserAchievements(pass.user_id);
+    const newlyUnlocked = await evaluateUserAchievements(pass.user_id);
 
     return res.json({
       success: true,
@@ -180,18 +184,19 @@ router.post('/check-in', requireAuth, requirePermission('checkin.access'), (req:
 });
 
 // 4. POST Cancel event pass (Adhering to existing cancellation policy)
-router.post('/:id/cancel', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/:id/cancel', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const userId = req.user!.id;
     const isAdmin = ['admin', 'super_admin'].includes(req.user!.role);
 
-    const pass = db.prepare(`
+    const pass = await adapter.queryOne<any>(`
       SELECT r.*, e.title as event_title, e.seats_booked
       FROM event_registrations r
       JOIN events e ON r.event_id = e.id
       WHERE r.id = ?
-    `).get(id) as any;
+    `, [id]);
 
     if (!pass) {
       return res.status(404).json({ error: 'Pass not found' });
@@ -209,26 +214,26 @@ router.post('/:id/cancel', requireAuth, (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Pass has already been cancelled.' });
     }
 
-    db.transaction(() => {
-      db.prepare("UPDATE event_registrations SET checkin_status = 'cancelled' WHERE id = ?").run(id);
-      db.prepare("UPDATE events SET seats_booked = MAX(0, seats_booked - 1) WHERE id = ?").run(pass.event_id);
+    await adapter.transaction(async (tx) => {
+      await tx.execute("UPDATE event_registrations SET checkin_status = 'cancelled' WHERE id = ?", [id]);
+      await tx.execute("UPDATE events SET seats_booked = CASE WHEN seats_booked > 0 THEN seats_booked - 1 ELSE 0 END WHERE id = ?", [pass.event_id]);
+    });
 
-      logActivity(
-        pass.user_id,
-        'event_cancelled',
-        `Cancelled Registration: ${pass.event_title}`,
-        `Registration for ${pass.event_title} was cancelled.`,
-        pass.event_id
-      );
+    await logActivity(
+      pass.user_id,
+      'event_cancelled',
+      `Cancelled Registration: ${pass.event_title}`,
+      `Registration for ${pass.event_title} was cancelled.`,
+      pass.event_id
+    );
 
-      createNotification(
-        pass.user_id,
-        'registration',
-        `Registration Cancelled`,
-        `Your pass for ${pass.event_title} has been cancelled successfully.`,
-        { eventId: pass.event_id }
-      );
-    })();
+    await createNotification(
+      pass.user_id,
+      'registration',
+      `Registration Cancelled`,
+      `Your pass for ${pass.event_title} has been cancelled successfully.`,
+      { eventId: pass.event_id }
+    );
 
     return res.json({ success: true, message: 'Registration cancelled successfully.' });
   } catch (err: any) {

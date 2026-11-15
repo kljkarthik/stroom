@@ -1,17 +1,18 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { requireAuth, optionalAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 // 1. GET all communities with optional filters
-router.get('/', optionalAuth, (req: AuthRequest, res: Response) => {
+router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { city_id, category, search } = req.query;
+    const adapter = getDatabaseAdapter();
 
     let query = `
-      SELECT 
+      SELECT
         comm.*,
         c.name as city_name,
         c.state as state_name,
@@ -40,19 +41,19 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response) => {
 
     query += ` ORDER BY total_members DESC, comm.name ASC`;
 
-    const rawCommunities = db.prepare(query).all(...params) as any[];
+    const rawCommunities = await adapter.query(query, params);
 
     // Check user membership status if authenticated
     const userId = req.user?.id;
     let userJoinedCommIds = new Set<string>();
     if (userId) {
-      const memberships = db.prepare(`SELECT community_id FROM community_members WHERE user_id = ?`).all(userId) as { community_id: string }[];
+      const memberships = await adapter.query<{ community_id: string }>(`SELECT community_id FROM community_members WHERE user_id = ?`, [userId]);
       userJoinedCommIds = new Set(memberships.map(m => m.community_id));
     }
 
     const communities = rawCommunities.map(c => ({
       ...c,
-      member_count: c.total_members,
+      member_count: Number(c.total_members) || 0,
       is_member: userJoinedCommIds.has(c.id),
     }));
 
@@ -64,12 +65,13 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response) => {
 });
 
 // 2. GET single community details
-router.get('/:id', optionalAuth, (req: AuthRequest, res: Response) => {
+router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const adapter = getDatabaseAdapter();
 
     const query = `
-      SELECT 
+      SELECT
         comm.*,
         c.name as city_name,
         c.state as state_name,
@@ -79,7 +81,7 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res: Response) => {
       WHERE comm.id = ? OR comm.slug = ?
     `;
 
-    const community = db.prepare(query).get(id, id) as any;
+    const community = await adapter.queryOne(query, [id, id]);
 
     if (!community) {
       return res.status(404).json({ error: 'Community not found' });
@@ -88,13 +90,13 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res: Response) => {
     // Check if current user is member
     let isMember = false;
     if (req.user) {
-      const mem = db.prepare(`SELECT id FROM community_members WHERE community_id = ? AND user_id = ?`).get(community.id, req.user.id);
+      const mem = await adapter.queryOne(`SELECT id FROM community_members WHERE community_id = ? AND user_id = ?`, [community.id, req.user.id]);
       isMember = !!mem;
     }
 
     // Fetch upcoming events related to this community's city or category
-    const upcomingEvents = db.prepare(`
-      SELECT 
+    const upcomingEvents = await adapter.query(`
+      SELECT
         e.*,
         c.name as city_name,
         v.name as venue_name,
@@ -106,12 +108,12 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res: Response) => {
       WHERE (e.city_id = ? OR e.category = ?) AND e.status IN ('published', 'live')
       ORDER BY e.is_flagship DESC, e.event_date ASC
       LIMIT 3
-    `).all(community.city_id, community.category);
+    `, [community.city_id, community.category]);
 
     return res.json({
       community: {
         ...community,
-        member_count: community.total_members,
+        member_count: Number(community.total_members) || 0,
         is_member: isMember,
         upcoming_events: upcomingEvents,
       }
@@ -123,34 +125,36 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res: Response) => {
 });
 
 // 3. POST Join Community (Authenticated)
-router.post('/:id/join', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/:id/join', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user!.id;
+    const adapter = getDatabaseAdapter();
 
-    const community = db.prepare(`SELECT id, name FROM communities WHERE id = ? OR slug = ?`).get(id, id) as any;
+    const community = await adapter.queryOne<any>(`SELECT id, name FROM communities WHERE id = ? OR slug = ?`, [id, id]);
     if (!community) {
       return res.status(404).json({ error: 'Community not found' });
     }
 
-    const existing = db.prepare(`SELECT id FROM community_members WHERE community_id = ? AND user_id = ?`).get(community.id, userId);
+    const existing = await adapter.queryOne(`SELECT id FROM community_members WHERE community_id = ? AND user_id = ?`, [community.id, userId]);
     if (!existing) {
       const membershipId = 'cm_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-      db.prepare(`
+      await adapter.execute(`
         INSERT INTO community_members (id, community_id, user_id, role)
         VALUES (?, ?, ?, 'member')
-      `).run(membershipId, community.id, userId);
+        ON CONFLICT (id) DO NOTHING
+      `, [membershipId, community.id, userId]);
     }
 
-    const updatedTotal = db.prepare(`
+    const updatedTotal = await adapter.queryOne<{ total: number }>(`
       SELECT (comm.member_count + (SELECT COUNT(*) FROM community_members WHERE community_id = comm.id)) as total
       FROM communities comm WHERE comm.id = ?
-    `).get(community.id) as { total: number };
+    `, [community.id]);
 
     return res.json({
       message: `You have joined ${community.name}!`,
       is_member: true,
-      member_count: updatedTotal.total,
+      member_count: Number(updatedTotal?.total) || 0,
     });
   } catch (err: any) {
     console.error('Error joining community:', err);
@@ -159,27 +163,28 @@ router.post('/:id/join', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // 4. POST Leave Community (Authenticated)
-router.post('/:id/leave', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/:id/leave', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user!.id;
+    const adapter = getDatabaseAdapter();
 
-    const community = db.prepare(`SELECT id, name FROM communities WHERE id = ? OR slug = ?`).get(id, id) as any;
+    const community = await adapter.queryOne<any>(`SELECT id, name FROM communities WHERE id = ? OR slug = ?`, [id, id]);
     if (!community) {
       return res.status(404).json({ error: 'Community not found' });
     }
 
-    db.prepare(`DELETE FROM community_members WHERE community_id = ? AND user_id = ?`).run(community.id, userId);
+    await adapter.execute(`DELETE FROM community_members WHERE community_id = ? AND user_id = ?`, [community.id, userId]);
 
-    const updatedTotal = db.prepare(`
+    const updatedTotal = await adapter.queryOne<{ total: number }>(`
       SELECT (comm.member_count + (SELECT COUNT(*) FROM community_members WHERE community_id = comm.id)) as total
       FROM communities comm WHERE comm.id = ?
-    `).get(community.id) as { total: number };
+    `, [community.id]);
 
     return res.json({
       message: `You have left ${community.name}.`,
       is_member: false,
-      member_count: updatedTotal.total,
+      member_count: Number(updatedTotal?.total) || 0,
     });
   } catch (err: any) {
     console.error('Error leaving community:', err);

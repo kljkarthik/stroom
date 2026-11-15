@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { AuthRequest, requirePermission } from '../middleware/auth';
 import {
   ROLE_PERMISSIONS,
@@ -13,6 +13,8 @@ import { recordAuditLog } from '../services/auditService';
 import { createNotification, evaluateUserAchievements, logActivity } from '../services/memberService';
 import { notifyPartner } from '../services/partnerService';
 import { validateSafeMediaUrl } from '../services/securityService';
+import { config } from '../config/env';
+import { d1BridgeClient } from '../services/d1BridgeClient';
 
 const router = Router();
 
@@ -20,7 +22,8 @@ const router = Router();
 // 0. ADMIN PERMISSIONS PROFILE & GLOBAL SEARCH
 // =========================================================================
 
-router.get('/me/permissions', (req: AuthRequest, res: Response) => {
+router.get('/me/permissions', async (req: AuthRequest, res: Response) => {
+    const adapter = getDatabaseAdapter();
   const user = req.user!;
   return res.json({
     success: true,
@@ -36,8 +39,9 @@ router.get('/me/permissions', (req: AuthRequest, res: Response) => {
   });
 });
 
-router.get('/global-search', requirePermission('overview.view'), (req: AuthRequest, res: Response) => {
+router.get('/global-search', requirePermission('overview.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const q = String(req.query.q || '').trim();
     if (!q || q.length < 2) {
       return res.json({ success: true, results: { members: [], events: [], communities: [], partners: [], venues: [], auctions: [] } });
@@ -46,32 +50,32 @@ router.get('/global-search', requirePermission('overview.view'), (req: AuthReque
     const role = req.user!.role;
 
     const members = hasPermission(role, 'members.view')
-      ? db.prepare(`
+      ? await adapter.query(`
           SELECT id, full_name, member_id, role, city
           FROM users
           WHERE full_name LIKE ? OR email LIKE ? OR member_id LIKE ?
           LIMIT 6
-        `).all(like, like, like)
+        `, [like, like, like])
       : [];
 
     const events = hasPermission(role, 'events.view')
-      ? db.prepare(`SELECT id, title, category, status, event_date FROM events WHERE title LIKE ? OR category LIKE ? LIMIT 6`).all(like, like)
+      ? await adapter.query(`SELECT id, title, category, status, event_date FROM events WHERE title LIKE ? OR category LIKE ? LIMIT 6`, [like, like])
       : [];
 
     const communities = hasPermission(role, 'communities.manage')
-      ? db.prepare(`SELECT id, name, category, status FROM communities WHERE name LIKE ? OR category LIKE ? LIMIT 6`).all(like, like)
+      ? await adapter.query(`SELECT id, name, category, status FROM communities WHERE name LIKE ? OR category LIKE ? LIMIT 6`, [like, like])
       : [];
 
     const partners = hasPermission(role, 'partners.verify')
-      ? db.prepare(`SELECT id, business_name, city, verification_status FROM partner_accounts WHERE business_name LIKE ? OR contact_email LIKE ? LIMIT 6`).all(like, like)
+      ? await adapter.query(`SELECT id, business_name, city, verification_status FROM partner_accounts WHERE business_name LIKE ? OR contact_email LIKE ? LIMIT 6`, [like, like])
       : [];
 
     const venues = hasPermission(role, 'venues.manage')
-      ? db.prepare(`SELECT id, name, area, is_verified FROM venues WHERE name LIKE ? OR area LIKE ? LIMIT 6`).all(like, like)
+      ? await adapter.query(`SELECT id, name, area, is_verified FROM venues WHERE name LIKE ? OR area LIKE ? LIMIT 6`, [like, like])
       : [];
 
     const auctions = hasPermission(role, 'auctions.view')
-      ? db.prepare(`SELECT id, title, status FROM auction_rooms WHERE title LIKE ? LIMIT 6`).all(like)
+      ? await adapter.query(`SELECT id, title, status FROM auction_rooms WHERE title LIKE ? LIMIT 6`, [like])
       : [];
 
     return res.json({
@@ -87,11 +91,12 @@ router.get('/global-search', requirePermission('overview.view'), (req: AuthReque
 // 1. CENTRALIZED PLATFORM OVERVIEW
 // =========================================================================
 
-router.get('/dashboard-overview', requirePermission('overview.view'), (req: AuthRequest, res: Response) => {
+router.get('/dashboard-overview', requirePermission('overview.view'), async (req: AuthRequest, res: Response) => {
   try {
-    const totalMembers = (db.prepare('SELECT COUNT(*) as c FROM users').get() as any).c;
+    const adapter = getDatabaseAdapter();
+    const totalMembers = (await adapter.queryOne('SELECT COUNT(*) as c FROM users') as any).c;
     // Active members explicitly defined: users updated or registered in last 30 days or participating in events/communities
-    const activeMembers30d = (db.prepare(`
+    const activeMembers30d = (await adapter.queryOne(`
       SELECT COUNT(DISTINCT id) as c FROM (
         SELECT id FROM users WHERE account_status = 'active' AND datetime(updated_at) >= datetime('now', '-30 days')
         UNION
@@ -99,37 +104,37 @@ router.get('/dashboard-overview', requirePermission('overview.view'), (req: Auth
         UNION
         SELECT user_id as id FROM activity_logs WHERE datetime(created_at) >= datetime('now', '-30 days')
       )
-    `).get() as any).c;
+    `) as any).c;
 
-    const totalEvents = (db.prepare('SELECT COUNT(*) as c FROM events WHERE COALESCE(is_archived, 0) = 0').get() as any).c;
-    const upcomingEventsCount = (db.prepare("SELECT COUNT(*) as c FROM events WHERE status IN ('published', 'live', 'Scheduled') AND COALESCE(is_archived, 0) = 0").get() as any).c;
-    const completedEventsCount = (db.prepare("SELECT COUNT(*) as c FROM events WHERE status = 'completed'").get() as any).c;
-    const totalRegistrations = (db.prepare("SELECT COUNT(*) as c FROM event_registrations WHERE checkin_status != 'cancelled'").get() as any).c;
-    const totalVerifiedAttendance = (db.prepare("SELECT COUNT(*) as c FROM event_registrations WHERE checkin_status = 'checked_in'").get() as any).c;
-    const totalCommunities = (db.prepare("SELECT COUNT(*) as c FROM communities WHERE COALESCE(status, 'published') != 'archived'").get() as any).c;
-    const verifiedPartners = (db.prepare("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status = 'Verified'").get() as any).c;
-    const pendingPartnersCount = (db.prepare("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status IN ('Submitted', 'Under Review')").get() as any).c;
-    const activeVenues = (db.prepare('SELECT COUNT(*) as c FROM venues WHERE is_verified = 1').get() as any).c;
-    const liveAuctions = (db.prepare("SELECT COUNT(*) as c FROM auction_rooms WHERE status = 'LIVE'").get() as any).c;
+    const totalEvents = (await adapter.queryOne('SELECT COUNT(*) as c FROM events WHERE COALESCE(is_archived, 0) = 0') as any).c;
+    const upcomingEventsCount = (await adapter.queryOne("SELECT COUNT(*) as c FROM events WHERE status IN ('published', 'live', 'Scheduled') AND COALESCE(is_archived, 0) = 0") as any).c;
+    const completedEventsCount = (await adapter.queryOne("SELECT COUNT(*) as c FROM events WHERE status = 'completed'") as any).c;
+    const totalRegistrations = (await adapter.queryOne("SELECT COUNT(*) as c FROM event_registrations WHERE checkin_status != 'cancelled'") as any).c;
+    const totalVerifiedAttendance = (await adapter.queryOne("SELECT COUNT(*) as c FROM event_registrations WHERE checkin_status = 'checked_in'") as any).c;
+    const totalCommunities = (await adapter.queryOne("SELECT COUNT(*) as c FROM communities WHERE COALESCE(status, 'published') != 'archived'") as any).c;
+    const verifiedPartners = (await adapter.queryOne("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status = 'Verified'") as any).c;
+    const pendingPartnersCount = (await adapter.queryOne("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status IN ('Submitted', 'Under Review')") as any).c;
+    const activeVenues = (await adapter.queryOne('SELECT COUNT(*) as c FROM venues WHERE is_verified = 1') as any).c;
+    const liveAuctions = (await adapter.queryOne("SELECT COUNT(*) as c FROM auction_rooms WHERE status = 'LIVE'") as any).c;
 
-    const recentRegistrations = db.prepare(`
+    const recentRegistrations = await adapter.query(`
       SELECT r.id, r.pass_code, r.checkin_status, r.created_at, u.full_name as member_name, e.title as event_title
       FROM event_registrations r
       JOIN users u ON r.user_id = u.id
       JOIN events e ON r.event_id = e.id
       ORDER BY r.created_at DESC
       LIMIT 6
-    `).all();
+    `);
 
-    const recentEvents = db.prepare(`
+    const recentEvents = await adapter.query(`
       SELECT e.id, e.title, e.category, e.status, e.event_date, c.name as city_name, e.created_at
       FROM events e
       JOIN cities c ON e.city_id = c.id
       ORDER BY e.created_at DESC
       LIMIT 5
-    `).all();
+    `);
 
-    const upcomingEvents = db.prepare(`
+    const upcomingEvents = await adapter.query(`
       SELECT e.id, e.title, e.event_date, e.event_time, e.seats_total, e.seats_booked, e.status, c.name as city_name, v.name as venue_name
       FROM events e
       JOIN cities c ON e.city_id = c.id
@@ -137,9 +142,9 @@ router.get('/dashboard-overview', requirePermission('overview.view'), (req: Auth
       WHERE e.status IN ('published', 'live')
       ORDER BY e.is_flagship DESC, e.created_at DESC
       LIMIT 5
-    `).all();
+    `);
 
-    const recentCheckins = db.prepare(`
+    const recentCheckins = await adapter.query(`
       SELECT r.id, r.pass_code, r.checked_in_at, u.full_name as member_name, e.title as event_title
       FROM event_registrations r
       JOIN users u ON r.user_id = u.id
@@ -147,25 +152,25 @@ router.get('/dashboard-overview', requirePermission('overview.view'), (req: Auth
       WHERE r.checkin_status = 'checked_in'
       ORDER BY r.checked_in_at DESC
       LIMIT 6
-    `).all();
+    `);
 
-    const partnerApplications = db.prepare(`
+    const partnerApplications = await adapter.query(`
       SELECT id, business_name, city, category, verification_status, created_at
       FROM partner_accounts
       ORDER BY verification_status = 'Submitted' DESC, created_at DESC
       LIMIT 5
-    `).all();
+    `);
 
-    const pendingCollaborations = db.prepare(`
+    const pendingCollaborations = await adapter.query(`
       SELECT pc.id, pc.event_name, pc.status, pc.proposed_date, p.business_name as partner_name
       FROM partner_collaborations pc
       JOIN partner_accounts p ON pc.partner_id = p.id
       WHERE pc.status IN ('Proposal Sent', 'Approved', 'Negotiation')
       ORDER BY pc.updated_at DESC
       LIMIT 5
-    `).all();
+    `);
 
-    const recentAuctionActivity = db.prepare(`
+    const recentAuctionActivity = await adapter.query(`
       SELECT b.id, b.amount, b.placed_at, a.title as auction_title, p.name as player_name, t.name as team_name
       FROM bids b
       JOIN auction_rooms a ON b.auction_id = a.id
@@ -173,10 +178,10 @@ router.get('/dashboard-overview', requirePermission('overview.view'), (req: Auth
       JOIN auction_teams t ON b.team_id = t.id
       ORDER BY b.placed_at DESC
       LIMIT 5
-    `).all();
+    `);
 
-    const reportedPostsCount = (db.prepare("SELECT COUNT(*) as c FROM community_posts WHERE status IN ('Reported', 'Pending')").get() as any).c;
-    const pendingCampaignsCount = (db.prepare("SELECT COUNT(*) as c FROM coupons WHERE approval_status = 'Submitted'").get() as any).c;
+    const reportedPostsCount = (await adapter.queryOne("SELECT COUNT(*) as c FROM community_posts WHERE status IN ('Reported', 'Pending')") as any).c;
+    const pendingCampaignsCount = (await adapter.queryOne("SELECT COUNT(*) as c FROM coupons WHERE approval_status = 'Submitted'") as any).c;
 
     const systemAlerts: { severity: string; title: string; detail: string; targetSection: string }[] = [];
     if (pendingPartnersCount > 0) {
@@ -257,8 +262,9 @@ function formatCategoryLabel(raw: string): string {
   return map[key] || raw.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-router.get('/overview-analytics', requirePermission('overview.view'), (req: AuthRequest, res: Response) => {
+router.get('/overview-analytics', requirePermission('overview.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { range = '30d', from, to } = req.query as Record<string, string>;
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
@@ -305,14 +311,14 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
     };
 
     // PIE A: Event Distribution by Category
-    const rawCategories = db.prepare(`
+    const rawCategories = await adapter.query(`
       SELECT e.category, COUNT(*) as count
       FROM events e
       WHERE COALESCE(e.is_archived, 0) = 0
         AND date(e.created_at) BETWEEN date(?) AND date(?)
       GROUP BY e.category
       ORDER BY count DESC
-    `).all(fromDate, toDate) as { category: string; count: number }[];
+    `, [fromDate, toDate]) as { category: string; count: number }[];
 
     const eventCategoryDistribution = withPercent(
       rawCategories.map((r) => ({
@@ -323,7 +329,7 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
     );
 
     // PIE B: Event Distribution by City
-    const rawCities = db.prepare(`
+    const rawCities = await adapter.query(`
       SELECT c.id, c.name, COUNT(e.id) as count
       FROM events e
       JOIN cities c ON e.city_id = c.id
@@ -331,17 +337,17 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
         AND date(e.created_at) BETWEEN date(?) AND date(?)
       GROUP BY c.id
       ORDER BY count DESC
-    `).all(fromDate, toDate) as { id: string; name: string; count: number }[];
+    `, [fromDate, toDate]) as { id: string; name: string; count: number }[];
     const eventCityDistribution = withPercent(rawCities);
 
     // PIE C: Registration Status Distribution
-    const rawRegStatus = db.prepare(`
+    const rawRegStatus = await adapter.query(`
       SELECT r.checkin_status as status, COUNT(*) as count
       FROM event_registrations r
       WHERE date(r.created_at) BETWEEN date(?) AND date(?)
       GROUP BY r.checkin_status
       ORDER BY count DESC
-    `).all(fromDate, toDate) as { status: string; count: number }[];
+    `, [fromDate, toDate]) as { status: string; count: number }[];
 
     const regStatusLabels: Record<string, string> = {
       confirmed: 'Confirmed',
@@ -358,38 +364,38 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
     );
 
     // PIE D: Partner Status Distribution
-    const rawPartnerStatus = db.prepare(`
+    const rawPartnerStatus = await adapter.query(`
       SELECT verification_status as name, COUNT(*) as count
       FROM partner_accounts
       WHERE date(created_at) BETWEEN date(?) AND date(?)
       GROUP BY verification_status
       ORDER BY count DESC
-    `).all(fromDate, toDate) as { name: string; count: number }[];
+    `, [fromDate, toDate]) as { name: string; count: number }[];
     const partnerStatusDistribution = withPercent(rawPartnerStatus);
 
     const bucketExpr = (col: string) => (groupByMonth ? `strftime('%Y-%m', ${col})` : `date(${col})`);
 
     // BAR A: Event Growth over time
-    const eventGrowth = db.prepare(`
+    const eventGrowth = await adapter.query(`
       SELECT ${bucketExpr('created_at')} as period, COUNT(*) as count
       FROM events
       WHERE date(created_at) BETWEEN date(?) AND date(?)
       GROUP BY period
       ORDER BY period ASC
-    `).all(fromDate, toDate) as { period: string; count: number }[];
+    `, [fromDate, toDate]) as { period: string; count: number }[];
 
     // BAR B: Member Growth over time
-    const memberGrowth = db.prepare(`
+    const memberGrowth = await adapter.query(`
       SELECT ${bucketExpr('created_at')} as period, COUNT(*) as count
       FROM users
       WHERE date(created_at) BETWEEN date(?) AND date(?)
       GROUP BY period
       ORDER BY period ASC
-    `).all(fromDate, toDate) as { period: string; count: number }[];
+    `, [fromDate, toDate]) as { period: string; count: number }[];
 
     // BAR C: City-wise Event Comparison
-    const cityEventComparison = db.prepare(`
-      SELECT 
+    const cityEventComparison = await adapter.query(`
+      SELECT
         c.name as city,
         COUNT(DISTINCT CASE WHEN COALESCE(e.is_archived, 0) = 0 AND date(e.created_at) BETWEEN date(?) AND date(?) THEN e.id END) as events,
         COUNT(DISTINCT CASE WHEN r.checkin_status != 'cancelled' AND date(r.created_at) BETWEEN date(?) AND date(?) THEN r.id END) as registrations,
@@ -399,11 +405,11 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
       LEFT JOIN event_registrations r ON r.event_id = e.id
       GROUP BY c.id
       ORDER BY events DESC, registrations DESC
-    `).all(fromDate, toDate, fromDate, toDate, fromDate, toDate);
+    `, [fromDate, toDate, fromDate, toDate, fromDate, toDate]);
 
     // BAR D: Event Attendance Comparison (Registrations vs Verified Check-ins)
-    const attendanceComparison = db.prepare(`
-      SELECT 
+    const attendanceComparison = await adapter.query(`
+      SELECT
         e.id,
         e.title as eventTitle,
         c.name as cityName,
@@ -417,7 +423,7 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
       HAVING registrations > 0 OR checkedIn > 0
       ORDER BY registrations DESC, checkedIn DESC
       LIMIT 8
-    `).all(fromDate, toDate, fromDate, toDate) as any[];
+    `, [fromDate, toDate, fromDate, toDate]) as any[];
 
     const attendanceFormatted = attendanceComparison.map((row) => ({
       ...row,
@@ -426,8 +432,8 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
     }));
 
     // BAR E: Partner Performance (Verified/Active Partners, Venues, Hosted Events, Real Coupon Redemptions)
-    const partnerPerformance = db.prepare(`
-      SELECT 
+    const partnerPerformance = await adapter.query(`
+      SELECT
         p.id,
         p.business_name as partnerName,
         p.city,
@@ -447,24 +453,24 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
       WHERE p.verification_status IN ('Verified', 'Submitted', 'Under Review')
       ORDER BY couponRedemptions DESC, hostedEvents DESC, venuesCount DESC
       LIMIT 8
-    `).all(fromDate, toDate, fromDate, toDate) as any[];
+    `, [fromDate, toDate, fromDate, toDate]) as any[];
 
     // LINE CHART: Merged Platform Activity Over Time
-    const regSeries = db.prepare(`
+    const regSeries = await adapter.query(`
       SELECT ${bucketExpr('created_at')} as period,
         COUNT(CASE WHEN checkin_status != 'cancelled' THEN 1 END) as registrations,
         COUNT(CASE WHEN checkin_status = 'checked_in' THEN 1 END) as checkins
       FROM event_registrations
       WHERE date(created_at) BETWEEN date(?) AND date(?)
       GROUP BY period
-    `).all(fromDate, toDate) as { period: string; registrations: number; checkins: number }[];
+    `, [fromDate, toDate]) as { period: string; registrations: number; checkins: number }[];
 
-    const publishedSeries = db.prepare(`
+    const publishedSeries = await adapter.query(`
       SELECT ${bucketExpr('created_at')} as period, COUNT(*) as eventsPublished
       FROM events
       WHERE status IN ('published', 'live', 'completed') AND date(created_at) BETWEEN date(?) AND date(?)
       GROUP BY period
-    `).all(fromDate, toDate) as { period: string; eventsPublished: number }[];
+    `, [fromDate, toDate]) as { period: string; eventsPublished: number }[];
 
     const timelineMap = new Map<string, { period: string; newMembers: number; registrations: number; checkins: number; eventsPublished: number }>();
     const ensureBucket = (period: string) => {
@@ -488,7 +494,7 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
       newMembers: memberGrowth.reduce((s, r) => s + r.count, 0),
       registrations: regSeries.reduce((s, r) => s + r.registrations, 0),
       verifiedCheckins: regSeries.reduce((s, r) => s + r.checkins, 0),
-      activePartners: (db.prepare("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status = 'Verified'").get() as any).c,
+      activePartners: (await adapter.queryOne("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status = 'Verified'") as any).c,
     };
 
     return res.json({
@@ -520,11 +526,12 @@ router.get('/overview-analytics', requirePermission('overview.view'), (req: Auth
 // 2. EVENTS, REGISTRATIONS & CITIES MANAGEMENT
 // =========================================================================
 
-router.get('/events', requirePermission('events.view'), (req: AuthRequest, res: Response) => {
+router.get('/events', requirePermission('events.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { status, city_id, search } = req.query as Record<string, string>;
     let query = `
-      SELECT 
+      SELECT
         e.*,
         c.name as city_name,
         v.name as venue_name,
@@ -556,7 +563,7 @@ router.get('/events', requirePermission('events.view'), (req: AuthRequest, res: 
     }
     query += ' ORDER BY COALESCE(e.is_archived, 0) ASC, e.created_at DESC';
 
-    const events = db.prepare(query).all(...params) as any[];
+    const events = await adapter.query(query, params) as any[];
     for (const ev of events) {
       ev.attendance_rate = ev.confirmed_count > 0 ? Math.round((ev.checked_in_count / ev.confirmed_count) * 100) : null;
       ev.capacity_utilization = ev.seats_total > 0 ? Math.round((ev.confirmed_count / ev.seats_total) * 100) : 0;
@@ -568,8 +575,9 @@ router.get('/events', requirePermission('events.view'), (req: AuthRequest, res: 
   }
 });
 
-router.post('/events', requirePermission('events.create'), (req: AuthRequest, res: Response) => {
+router.post('/events', requirePermission('events.create'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const {
       title,
       description,
@@ -605,15 +613,14 @@ router.post('/events', requirePermission('events.create'), (req: AuthRequest, re
     }
 
     const eventId = 'evt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO events (
         id, city_id, venue_id, title, category, event_date, event_time, end_time,
         organizer_name, description, seats_total, registration_deadline, entry_fee,
         visibility, eligibility_requirements, status, is_flagship, image_url, created_by
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      eventId,
+    `, [eventId,
       city_id,
       venue_id,
       title.trim(),
@@ -631,11 +638,10 @@ router.post('/events', requirePermission('events.create'), (req: AuthRequest, re
       desiredStatus,
       is_flagship ? 1 : 0,
       imgCheck.value || 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800',
-      req.user!.id
-    );
+      req.user!.id]);
 
-    const created = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
-    recordAuditLog({
+    const created = await adapter.queryOne('SELECT * FROM events WHERE id = ?', [eventId]);
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -651,10 +657,11 @@ router.post('/events', requirePermission('events.create'), (req: AuthRequest, re
   }
 });
 
-router.put('/events/:id', requirePermission('events.edit'), (req: AuthRequest, res: Response) => {
+router.put('/events/:id', requirePermission('events.edit'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
-    const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(id) as any;
+    const existing = await adapter.queryOne('SELECT * FROM events WHERE id = ?', [id]) as any;
     if (!existing) return res.status(404).json({ error: 'Event not found' });
 
     const {
@@ -687,7 +694,7 @@ router.put('/events/:id', requirePermission('events.edit'), (req: AuthRequest, r
       return res.status(400).json({ error: imgCheck.error });
     }
 
-    db.prepare(`
+    await adapter.execute(`
       UPDATE events
       SET title = COALESCE(?, title),
           description = COALESCE(?, description),
@@ -708,8 +715,7 @@ router.put('/events/:id', requirePermission('events.edit'), (req: AuthRequest, r
           is_archived = COALESCE(?, is_archived),
           is_flagship = COALESCE(?, is_flagship)
       WHERE id = ?
-    `).run(
-      title,
+    `, [title,
       description,
       image_url,
       category,
@@ -727,16 +733,15 @@ router.put('/events/:id', requirePermission('events.edit'), (req: AuthRequest, r
       status,
       is_archived !== undefined ? (is_archived ? 1 : 0) : null,
       is_flagship !== undefined ? (is_flagship ? 1 : 0) : null,
-      id
-    );
+      id]);
 
-    const updated = db.prepare('SELECT * FROM events WHERE id = ?').get(id) as any;
+    const updated = await adapter.queryOne('SELECT * FROM events WHERE id = ?', [id]) as any;
     const actionName =
       status === 'cancelled' ? 'EVENT_CANCELLED' :
       status === 'published' && existing.status !== 'published' ? 'EVENT_PUBLISHED' :
       is_archived ? 'EVENT_ARCHIVED' : 'EVENT_UPDATED';
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -753,22 +758,22 @@ router.put('/events/:id', requirePermission('events.edit'), (req: AuthRequest, r
   }
 });
 
-router.post('/events/:id/duplicate', requirePermission('events.create'), (req: AuthRequest, res: Response) => {
+router.post('/events/:id/duplicate', requirePermission('events.create'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
-    const src = db.prepare('SELECT * FROM events WHERE id = ?').get(id) as any;
+    const src = await adapter.queryOne('SELECT * FROM events WHERE id = ?', [id]) as any;
     if (!src) return res.status(404).json({ error: 'Source event not found' });
 
     const newId = 'evt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO events (
         id, city_id, venue_id, title, category, event_date, event_time, end_time,
         organizer_name, description, seats_total, entry_fee, visibility,
         eligibility_requirements, status, is_flagship, image_url, created_by
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, ?, ?)
-    `).run(
-      newId,
+    `, [newId,
       src.city_id,
       src.venue_id,
       `${src.title} (Copy)`,
@@ -783,11 +788,10 @@ router.post('/events/:id/duplicate', requirePermission('events.create'), (req: A
       src.visibility || 'public',
       src.eligibility_requirements || '',
       src.image_url,
-      req.user!.id
-    );
+      req.user!.id]);
 
-    const dup = db.prepare('SELECT * FROM events WHERE id = ?').get(newId);
-    recordAuditLog({
+    const dup = await adapter.queryOne('SELECT * FROM events WHERE id = ?', [newId]);
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -803,15 +807,16 @@ router.post('/events/:id/duplicate', requirePermission('events.create'), (req: A
   }
 });
 
-function inspectEventDependencies(eventId: string) {
-  const registrationsTotal = (db.prepare('SELECT COUNT(*) as c FROM event_registrations WHERE event_id = ?').get(eventId) as any).c;
-  const activeRegistrations = (db.prepare("SELECT COUNT(*) as c FROM event_registrations WHERE event_id = ? AND checkin_status != 'cancelled'").get(eventId) as any).c;
-  const checkedInCount = (db.prepare("SELECT COUNT(*) as c FROM event_registrations WHERE event_id = ? AND checkin_status = 'checked_in'").get(eventId) as any).c;
-  const attendanceStamps = (db.prepare('SELECT COUNT(*) as c FROM passport_stamps WHERE event_id = ?').get(eventId) as any).c;
-  const paymentsCount = (db.prepare('SELECT COUNT(*) as c FROM payment_transactions WHERE event_id = ?').get(eventId) as any).c;
-  const auctionsCount = (db.prepare('SELECT COUNT(*) as c FROM auction_rooms WHERE event_id = ?').get(eventId) as any).c;
-  const collaborationsCount = (db.prepare('SELECT COUNT(*) as c FROM partner_collaborations WHERE event_id = ?').get(eventId) as any).c;
-  const venueBookingsCount = (db.prepare("SELECT COUNT(*) as c FROM venue_availability WHERE event_id = ? AND status = 'booked'").get(eventId) as any).c;
+async function inspectEventDependencies(eventId: string) {
+  const adapter = getDatabaseAdapter();
+  const registrationsTotal = Number((await adapter.queryOne('SELECT COUNT(*) as c FROM event_registrations WHERE event_id = ?', [eventId]) as any)?.c || 0);
+  const activeRegistrations = Number((await adapter.queryOne("SELECT COUNT(*) as c FROM event_registrations WHERE event_id = ? AND checkin_status != 'cancelled'", [eventId]) as any)?.c || 0);
+  const checkedInCount = Number((await adapter.queryOne("SELECT COUNT(*) as c FROM event_registrations WHERE event_id = ? AND checkin_status = 'checked_in'", [eventId]) as any)?.c || 0);
+  const attendanceStamps = Number((await adapter.queryOne('SELECT COUNT(*) as c FROM passport_stamps WHERE event_id = ?', [eventId]) as any)?.c || 0);
+  const paymentsCount = Number((await adapter.queryOne('SELECT COUNT(*) as c FROM payment_transactions WHERE event_id = ?', [eventId]) as any)?.c || 0);
+  const auctionsCount = Number((await adapter.queryOne('SELECT COUNT(*) as c FROM auction_rooms WHERE event_id = ?', [eventId]) as any)?.c || 0);
+  const collaborationsCount = Number((await adapter.queryOne('SELECT COUNT(*) as c FROM partner_collaborations WHERE event_id = ?', [eventId]) as any)?.c || 0);
+  const venueBookingsCount = Number((await adapter.queryOne("SELECT COUNT(*) as c FROM venue_availability WHERE event_id = ? AND status = 'booked'", [eventId]) as any)?.c || 0);
 
   const hasProtectedDependencies =
     registrationsTotal > 0 ||
@@ -835,21 +840,22 @@ function inspectEventDependencies(eventId: string) {
   };
 }
 
-router.get('/events/:id/dependencies', requirePermission('events.view'), (req: AuthRequest, res: Response) => {
+router.get('/events/:id/dependencies', requirePermission('events.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
-    const existing = db.prepare(`
+    const existing = await adapter.queryOne(`
       SELECT e.id, e.title, e.event_date, e.event_time, e.status, COALESCE(e.is_archived, 0) as is_archived, c.name as city_name
       FROM events e
       LEFT JOIN cities c ON e.city_id = c.id
       WHERE e.id = ?
-    `).get(id) as any;
+    `, [id]) as any;
 
     if (!existing) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    const deps = inspectEventDependencies(id);
+    const deps = await inspectEventDependencies(id);
     const paymentsAuthorized = hasPermission(req.user!.role, 'payments.view');
 
     return res.json({
@@ -867,30 +873,31 @@ router.get('/events/:id/dependencies', requirePermission('events.view'), (req: A
   }
 });
 
-router.delete('/events/:id', requirePermission('events.delete'), (req: AuthRequest, res: Response) => {
+router.delete('/events/:id', requirePermission('events.delete'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const forcePermanent = req.query.forcePermanent === 'true' || req.body?.forcePermanent === true;
     const requestedMode = String(req.query.mode || req.body?.mode || '').toLowerCase(); // '', 'archive', 'cancel', 'delete'
     const reason = String(req.body?.reason || req.query.reason || '').trim() || undefined;
 
-    const existing = db.prepare(`
+    const existing = await adapter.queryOne(`
       SELECT e.*, c.name as city_name
       FROM events e
       LEFT JOIN cities c ON e.city_id = c.id
       WHERE e.id = ?
-    `).get(id) as any;
+    `, [id]) as any;
 
     if (!existing) {
       return res.status(404).json({ error: 'Event not found' });
     }
 
-    const dependencies = inspectEventDependencies(id);
+    const dependencies = await inspectEventDependencies(id);
     const { hasProtectedDependencies, registrationsTotal } = dependencies;
     const effectiveMode = forcePermanent ? 'delete' : requestedMode || (hasProtectedDependencies ? 'archive' : 'delete');
 
     if (effectiveMode === 'delete' && hasProtectedDependencies) {
-      recordAuditLog({
+      await recordAuditLog({
         actorId: req.user!.id,
         actorName: req.user!.full_name,
         actorRole: req.user!.role,
@@ -919,9 +926,9 @@ router.delete('/events/:id', requirePermission('events.delete'), (req: AuthReque
         });
       }
 
-      const updated = db.transaction(() => {
-        db.prepare("UPDATE events SET status = 'cancelled' WHERE id = ?").run(id);
-        recordAuditLog({
+      const updated = await adapter.transaction(async (tx) => {
+        await tx.execute("UPDATE events SET status = 'cancelled' WHERE id = ?", [id]);
+        await recordAuditLog({
           actorId: req.user!.id,
           actorName: req.user!.full_name,
           actorRole: req.user!.role,
@@ -933,8 +940,8 @@ router.delete('/events/:id', requirePermission('events.delete'), (req: AuthReque
           result: 'success',
           throwOnError: true,
         });
-        return db.prepare('SELECT * FROM events WHERE id = ?').get(id);
-      })();
+        return await tx.queryOne('SELECT * FROM events WHERE id = ?', [id]);
+      });
 
       return res.json({
         success: true,
@@ -958,14 +965,14 @@ router.delete('/events/:id', requirePermission('events.delete'), (req: AuthReque
         });
       }
 
-      const updated = db.transaction(() => {
-        db.prepare(`
+      const updated = await adapter.transaction(async (tx) => {
+        await tx.execute(`
           UPDATE events
           SET status = ?, is_archived = 1
           WHERE id = ?
-        `).run(nextStatus, id);
+        `, [nextStatus, id]);
 
-        recordAuditLog({
+        await recordAuditLog({
           actorId: req.user!.id,
           actorName: req.user!.full_name,
           actorRole: req.user!.role,
@@ -977,8 +984,8 @@ router.delete('/events/:id', requirePermission('events.delete'), (req: AuthReque
           result: 'success',
           throwOnError: true,
         });
-        return db.prepare('SELECT * FROM events WHERE id = ?').get(id);
-      })();
+        return await tx.queryOne('SELECT * FROM events WHERE id = ?', [id]);
+      });
 
       return res.json({
         success: true,
@@ -990,9 +997,9 @@ router.delete('/events/:id', requirePermission('events.delete'), (req: AuthReque
     }
 
     // effectiveMode === 'delete' and zero dependent records exist
-    db.transaction(() => {
-      db.prepare('DELETE FROM events WHERE id = ?').run(id);
-      recordAuditLog({
+    await adapter.transaction(async (tx) => {
+      await tx.execute('DELETE FROM events WHERE id = ?', [id]);
+      await recordAuditLog({
         actorId: req.user!.id,
         actorName: req.user!.full_name,
         actorRole: req.user!.role,
@@ -1009,7 +1016,7 @@ router.delete('/events/:id', requirePermission('events.delete'), (req: AuthReque
         result: 'success',
         throwOnError: true,
       });
-    })();
+    });
 
     return res.json({
       success: true,
@@ -1023,11 +1030,12 @@ router.delete('/events/:id', requirePermission('events.delete'), (req: AuthReque
   }
 });
 
-router.get('/registrations', requirePermission('events.view'), (req: AuthRequest, res: Response) => {
+router.get('/registrations', requirePermission('events.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { event_id, status, search } = req.query as Record<string, string>;
     let query = `
-      SELECT 
+      SELECT
         r.*,
         u.full_name as participant_name,
         u.email as participant_email,
@@ -1058,40 +1066,41 @@ router.get('/registrations', requirePermission('events.view'), (req: AuthRequest
     }
     query += ' ORDER BY r.created_at DESC LIMIT 200';
 
-    const registrations = db.prepare(query).all(...params);
+    const registrations = await adapter.query(query, params);
     return res.json({ success: true, registrations });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-router.patch('/registrations/:id', requirePermission('registrations.manage'), (req: AuthRequest, res: Response) => {
+router.patch('/registrations/:id', requirePermission('registrations.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const { checkin_status, seat_tier } = req.body;
-    const reg = db.prepare('SELECT * FROM event_registrations WHERE id = ?').get(id) as any;
+    const reg = await adapter.queryOne('SELECT * FROM event_registrations WHERE id = ?', [id]) as any;
     if (!reg) return res.status(404).json({ error: 'Registration not found' });
 
-    const paidTx = db.prepare("SELECT * FROM payment_transactions WHERE registration_id = ? AND status = 'Successful'").get(id);
+    const paidTx = await adapter.queryOne("SELECT * FROM payment_transactions WHERE registration_id = ? AND status = 'Successful'", [id]);
     if (paidTx && checkin_status === 'cancelled') {
       return res.status(400).json({ error: 'Cannot cancel a registration linked to a settled payment directly; issue a refund via Payments first.' });
     }
 
-    db.transaction(() => {
+    await adapter.transaction(async (tx) => {
       if (checkin_status && ['confirmed', 'cancelled'].includes(checkin_status)) {
         if (checkin_status === 'cancelled' && reg.checkin_status !== 'cancelled') {
-          db.prepare('UPDATE events SET seats_booked = MAX(0, seats_booked - 1) WHERE id = ?').run(reg.event_id);
+          await tx.execute('UPDATE events SET seats_booked = CASE WHEN seats_booked > 0 THEN seats_booked - 1 ELSE 0 END WHERE id = ?', [reg.event_id]);
         } else if (checkin_status === 'confirmed' && reg.checkin_status === 'cancelled') {
-          db.prepare('UPDATE events SET seats_booked = seats_booked + 1 WHERE id = ?').run(reg.event_id);
+          await tx.execute('UPDATE events SET seats_booked = seats_booked + 1 WHERE id = ?', [reg.event_id]);
         }
-        db.prepare('UPDATE event_registrations SET checkin_status = ? WHERE id = ?').run(checkin_status, id);
+        await tx.execute('UPDATE event_registrations SET checkin_status = ? WHERE id = ?', [checkin_status, id]);
       }
       if (seat_tier) {
-        db.prepare('UPDATE event_registrations SET seat_tier = ? WHERE id = ?').run(seat_tier, id);
+        await tx.execute('UPDATE event_registrations SET seat_tier = ? WHERE id = ?', [seat_tier, id]);
       }
-    })();
+    });
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1102,7 +1111,7 @@ router.patch('/registrations/:id', requirePermission('registrations.manage'), (r
       afterData: { checkin_status: checkin_status || reg.checkin_status, seat_tier: seat_tier || reg.seat_tier },
     });
 
-    const updated = db.prepare('SELECT * FROM event_registrations WHERE id = ?').get(id);
+    const updated = await adapter.queryOne('SELECT * FROM event_registrations WHERE id = ?', [id]);
     return res.json({ success: true, registration: updated });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -1110,38 +1119,40 @@ router.patch('/registrations/:id', requirePermission('registrations.manage'), (r
 });
 
 // Cities CRUD
-router.get('/cities', requirePermission('events.view'), (req: AuthRequest, res: Response) => {
+router.get('/cities', requirePermission('events.view'), async (req: AuthRequest, res: Response) => {
   try {
-    const cities = db.prepare(`
-      SELECT 
+    const adapter = getDatabaseAdapter();
+    const cities = await adapter.query(`
+      SELECT
         c.*,
         (SELECT COUNT(*) FROM events WHERE city_id = c.id) as events_count,
         (SELECT COUNT(*) FROM communities WHERE city_id = c.id) as communities_count
       FROM cities c
       ORDER BY c.is_featured DESC, c.launch_order ASC, c.name ASC
-    `).all();
+    `);
     return res.json({ success: true, cities });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/cities', requirePermission('cities.manage'), (req: AuthRequest, res: Response) => {
+router.post('/cities', requirePermission('cities.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { name, state, tagline, description, image_url, is_featured, is_active } = req.body;
     if (!name || !state) return res.status(400).json({ error: 'City name and state are required' });
 
-    const dup = db.prepare('SELECT id FROM cities WHERE LOWER(name) = LOWER(?)').get(name.trim());
+    const dup = await adapter.queryOne('SELECT id FROM cities WHERE LOWER(name) = LOWER(?)', [name.trim()]);
     if (dup) return res.status(409).json({ error: `City ${name} already exists.` });
 
-    const id = 'city_' + name.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) + '_' + Date.now().toString().slice(-3);
-    db.prepare(`
+    const id = 'city_' + name.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) + '_' + crypto.randomUUID().replace(/-/g, '').slice(0, 6);
+    await adapter.execute(`
       INSERT INTO cities (id, name, state, is_active, launch_order, tagline, description, image_url, is_featured)
       VALUES (?, ?, ?, ?, 10, ?, ?, ?, ?)
-    `).run(id, name.trim(), state.trim(), is_active !== false ? 1 : 0, tagline || '', description || '', image_url || '', is_featured ? 1 : 0);
+    `, [id, name.trim(), state.trim(), is_active !== false ? 1 : 0, tagline || '', description || '', image_url || '', is_featured ? 1 : 0]);
 
-    const city = db.prepare('SELECT * FROM cities WHERE id = ?').get(id);
-    recordAuditLog({
+    const city = await adapter.queryOne('SELECT * FROM cities WHERE id = ?', [id]);
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1157,14 +1168,15 @@ router.post('/cities', requirePermission('cities.manage'), (req: AuthRequest, re
   }
 });
 
-router.put('/cities/:id', requirePermission('cities.manage'), (req: AuthRequest, res: Response) => {
+router.put('/cities/:id', requirePermission('cities.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
-    const existing = db.prepare('SELECT * FROM cities WHERE id = ?').get(id) as any;
+    const existing = await adapter.queryOne('SELECT * FROM cities WHERE id = ?', [id]) as any;
     if (!existing) return res.status(404).json({ error: 'City not found' });
 
     const { name, state, tagline, description, image_url, is_featured, is_active } = req.body;
-    db.prepare(`
+    await adapter.execute(`
       UPDATE cities
       SET name = COALESCE(?, name),
           state = COALESCE(?, state),
@@ -1174,19 +1186,17 @@ router.put('/cities/:id', requirePermission('cities.manage'), (req: AuthRequest,
           is_featured = COALESCE(?, is_featured),
           is_active = COALESCE(?, is_active)
       WHERE id = ?
-    `).run(
-      name,
+    `, [name,
       state,
       tagline,
       description,
       image_url,
       is_featured !== undefined ? (is_featured ? 1 : 0) : null,
       is_active !== undefined ? (is_active ? 1 : 0) : null,
-      id
-    );
+      id]);
 
-    const updated = db.prepare('SELECT * FROM cities WHERE id = ?').get(id);
-    recordAuditLog({
+    const updated = await adapter.queryOne('SELECT * FROM cities WHERE id = ?', [id]);
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1207,8 +1217,9 @@ router.put('/cities/:id', requirePermission('cities.manage'), (req: AuthRequest,
 // 3. MEMBERS, ROLES & GRANULAR PERMISSIONS
 // =========================================================================
 
-router.get('/members-directory', requirePermission('members.view'), (req: AuthRequest, res: Response) => {
+router.get('/members-directory', requirePermission('members.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { search, city, role, status, sort = 'created_at', page = '1', limit = '25' } = req.query as Record<string, string>;
     const canSeeEmail = hasPermission(req.user!.role, 'members.manage') || ['super_admin', 'admin', 'platform_admin'].includes(req.user!.role);
 
@@ -1232,15 +1243,15 @@ router.get('/members-directory', requirePermission('members.view'), (req: AuthRe
       params.push(status);
     }
 
-    const total = (db.prepare(`SELECT COUNT(*) as c FROM users u ${where}`).get(...params) as any).c;
+    const total = Number((await adapter.queryOne(`SELECT COUNT(*) as c FROM users u ${where}`, params) as any)?.c || 0);
     const p = Math.max(1, Number(page) || 1);
     const l = Math.min(100, Math.max(1, Number(limit) || 25));
     const offset = (p - 1) * l;
 
     const orderExpr = sort === 'name' ? 'u.full_name ASC' : sort === 'attendance' ? 'attended_count DESC' : 'u.created_at DESC';
 
-    const rows = db.prepare(`
-      SELECT 
+    const rows = await adapter.query(`
+      SELECT
         u.id, u.full_name, u.display_name, u.avatar_url, u.email, u.role, u.member_id,
         u.city, COALESCE(u.account_status, 'active') as account_status, u.onboarding_status, u.created_at,
         (SELECT COUNT(*) FROM event_registrations WHERE user_id = u.id) as registrations_count,
@@ -1250,7 +1261,7 @@ router.get('/members-directory', requirePermission('members.view'), (req: AuthRe
       ${where}
       ORDER BY ${orderExpr}
       LIMIT ? OFFSET ?
-    `).all(...params, l, offset) as any[];
+    `, [...params, l, offset]) as any[];
 
     const members = rows.map((m) => ({
       ...m,
@@ -1263,8 +1274,9 @@ router.get('/members-directory', requirePermission('members.view'), (req: AuthRe
   }
 });
 
-router.patch('/members/:id/status', requirePermission('members.manage'), (req: AuthRequest, res: Response) => {
+router.patch('/members/:id/status', requirePermission('members.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const { account_status, reason } = req.body;
     if (!['active', 'suspended'].includes(account_status)) {
@@ -1274,16 +1286,39 @@ router.patch('/members/:id/status', requirePermission('members.manage'), (req: A
       return res.status(400).json({ error: 'Cannot suspend or modify your own active administrator account' });
     }
 
-    const target = db.prepare('SELECT id, full_name, role, COALESCE(account_status, \'active\') as account_status FROM users WHERE id = ?').get(id) as any;
+    if (config.useD1AuthBridge) {
+      const bridgeRes = await d1BridgeClient.changeAccountStatus(id, account_status, {
+        id: req.user!.id,
+        role: req.user!.role,
+      });
+
+      if (!bridgeRes.success) {
+        return res.status(400).json({ error: bridgeRes.error || 'Failed to update member status via D1 bridge' });
+      }
+
+      await recordAuditLog({
+        actorId: req.user!.id,
+        actorName: req.user!.full_name,
+        actorRole: req.user!.role,
+        action: account_status === 'suspended' ? 'MEMBER_SUSPENDED' : 'MEMBER_REACTIVATED',
+        entityType: 'user',
+        entityId: id,
+        afterData: { account_status, reason },
+      });
+
+      return res.json({ success: true, memberId: id, account_status });
+    }
+
+    const target = await adapter.queryOne('SELECT id, full_name, role, COALESCE(account_status, \'active\') as account_status FROM users WHERE id = ?', [id]) as any;
     if (!target) return res.status(404).json({ error: 'Member not found' });
 
     if (PRIVILEGED_ROLES.includes(target.role) && req.user!.role !== 'super_admin') {
       return res.status(403).json({ error: 'Only a Super Admin can suspend or reactivate privileged admin accounts.' });
     }
 
-    db.prepare("UPDATE users SET account_status = ?, updated_at = datetime('now') WHERE id = ?").run(account_status, id);
+    await adapter.execute("UPDATE users SET account_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [account_status, id]);
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1300,8 +1335,9 @@ router.patch('/members/:id/status', requirePermission('members.manage'), (req: A
   }
 });
 
-router.patch('/members/:id/role', requirePermission('roles.assign'), (req: AuthRequest, res: Response) => {
+router.patch('/members/:id/role', requirePermission('roles.assign'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const { role } = req.body;
     const validRoles = Object.keys(ROLE_PERMISSIONS);
@@ -1313,12 +1349,50 @@ router.patch('/members/:id/role', requirePermission('roles.assign'), (req: AuthR
       return res.status(400).json({ error: 'Cannot alter your own administrative role.' });
     }
 
-    const target = db.prepare('SELECT id, full_name, role FROM users WHERE id = ?').get(id) as any;
+    if (config.useD1AuthBridge) {
+      // Strict Privilege Escalation Prevention
+      if (PRIVILEGED_ROLES.includes(role) && req.user!.role !== 'super_admin') {
+        await recordAuditLog({
+          actorId: req.user!.id,
+          actorName: req.user!.full_name,
+          actorRole: req.user!.role,
+          action: 'PRIVILEGE_ESCALATION_BLOCKED',
+          entityType: 'user',
+          entityId: id,
+          details: { attemptedRole: role },
+          result: 'denied',
+        });
+        return res.status(403).json({ error: 'Forbidden: Only Super Admins can assign or modify privileged Admin roles.' });
+      }
+
+      const bridgeRes = await d1BridgeClient.updateUserRole(id, role, {
+        id: req.user!.id,
+        role: req.user!.role,
+      });
+
+      if (!bridgeRes.success) {
+        return res.status(400).json({ error: bridgeRes.error || 'Failed to update member role via D1 bridge' });
+      }
+
+      await recordAuditLog({
+        actorId: req.user!.id,
+        actorName: req.user!.full_name,
+        actorRole: req.user!.role,
+        action: 'MEMBER_ROLE_CHANGED',
+        entityType: 'user',
+        entityId: id,
+        afterData: { role },
+      });
+
+      return res.json({ success: true, memberId: id, role });
+    }
+
+    const target = await adapter.queryOne('SELECT id, full_name, role FROM users WHERE id = ?', [id]) as any;
     if (!target) return res.status(404).json({ error: 'Member not found' });
 
     // Strict Privilege Escalation Prevention
     if ((PRIVILEGED_ROLES.includes(role) || PRIVILEGED_ROLES.includes(target.role)) && req.user!.role !== 'super_admin') {
-      recordAuditLog({
+      await recordAuditLog({
         actorId: req.user!.id,
         actorName: req.user!.full_name,
         actorRole: req.user!.role,
@@ -1331,9 +1405,9 @@ router.patch('/members/:id/role', requirePermission('roles.assign'), (req: AuthR
       return res.status(403).json({ error: 'Forbidden: Only Super Admins can assign or modify privileged Admin roles.' });
     }
 
-    db.prepare("UPDATE users SET role = ?, updated_at = datetime('now') WHERE id = ?").run(role, id);
+    await adapter.execute("UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [role, id]);
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1350,7 +1424,7 @@ router.patch('/members/:id/role', requirePermission('roles.assign'), (req: AuthR
   }
 });
 
-router.get('/roles-matrix', requirePermission('overview.view'), (req: AuthRequest, res: Response) => {
+router.get('/roles-matrix', requirePermission('overview.view'), async (req: AuthRequest, res: Response) => {
   return res.json({
     success: true,
     matrix: ROLE_PERMISSIONS,
@@ -1361,10 +1435,11 @@ router.get('/roles-matrix', requirePermission('overview.view'), (req: AuthReques
 // 4. COMMUNITY MANAGEMENT
 // =========================================================================
 
-router.get('/communities', requirePermission('communities.manage'), (req: AuthRequest, res: Response) => {
+router.get('/communities', requirePermission('communities.manage'), async (req: AuthRequest, res: Response) => {
   try {
-    const communities = db.prepare(`
-      SELECT 
+    const adapter = getDatabaseAdapter();
+    const communities = await adapter.query(`
+      SELECT
         comm.*,
         c.name as city_name,
         (SELECT COUNT(*) FROM community_members WHERE community_id = comm.id) as real_joined_count,
@@ -1373,15 +1448,16 @@ router.get('/communities', requirePermission('communities.manage'), (req: AuthRe
       FROM communities comm
       JOIN cities c ON comm.city_id = c.id
       ORDER BY comm.created_at DESC
-    `).all();
+    `);
     return res.json({ success: true, communities });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/communities', requirePermission('communities.manage'), (req: AuthRequest, res: Response) => {
+router.post('/communities', requirePermission('communities.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { name, city_id, category, description, image_url, organizer_name, organizer_role, meeting_schedule, guidelines, status } = req.body;
     if (!name || !city_id || !category) {
       return res.status(400).json({ error: 'Community name, city, and category are required' });
@@ -1389,15 +1465,14 @@ router.post('/communities', requirePermission('communities.manage'), (req: AuthR
     const id = 'comm_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12);
     const slug = `${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString().slice(-4)}`;
 
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO communities (
         id, name, slug, city_id, category, description, image_url,
         organizer_name, organizer_role, organizer_avatar, member_count,
         meeting_schedule, guidelines, status, manager_user_id
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
-    `).run(
-      id,
+    `, [id,
       name.trim(),
       slug,
       city_id,
@@ -1410,11 +1485,10 @@ router.post('/communities', requirePermission('communities.manage'), (req: AuthR
       meeting_schedule || 'Every Weekend',
       guidelines || 'Respect all members and foster authentic real-world conversations.',
       status || 'published',
-      req.user!.id
-    );
+      req.user!.id]);
 
-    const community = db.prepare('SELECT * FROM communities WHERE id = ?').get(id);
-    recordAuditLog({
+    const community = await adapter.queryOne('SELECT * FROM communities WHERE id = ?', [id]);
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1430,14 +1504,15 @@ router.post('/communities', requirePermission('communities.manage'), (req: AuthR
   }
 });
 
-router.put('/communities/:id', requirePermission('communities.manage'), (req: AuthRequest, res: Response) => {
+router.put('/communities/:id', requirePermission('communities.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
-    const existing = db.prepare('SELECT * FROM communities WHERE id = ?').get(id) as any;
+    const existing = await adapter.queryOne('SELECT * FROM communities WHERE id = ?', [id]) as any;
     if (!existing) return res.status(404).json({ error: 'Community not found' });
 
     const { name, city_id, category, description, organizer_name, meeting_schedule, guidelines, status } = req.body;
-    db.prepare(`
+    await adapter.execute(`
       UPDATE communities
       SET name = COALESCE(?, name),
           city_id = COALESCE(?, city_id),
@@ -1448,10 +1523,10 @@ router.put('/communities/:id', requirePermission('communities.manage'), (req: Au
           guidelines = COALESCE(?, guidelines),
           status = COALESCE(?, status)
       WHERE id = ?
-    `).run(name, city_id, category, description, organizer_name, meeting_schedule, guidelines, status, id);
+    `, [name, city_id, category, description, organizer_name, meeting_schedule, guidelines, status, id]);
 
-    const updated = db.prepare('SELECT * FROM communities WHERE id = ?').get(id);
-    recordAuditLog({
+    const updated = await adapter.queryOne('SELECT * FROM communities WHERE id = ?', [id]);
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1468,16 +1543,17 @@ router.put('/communities/:id', requirePermission('communities.manage'), (req: Au
   }
 });
 
-router.get('/communities/:id/members', requirePermission('communities.manage'), (req: AuthRequest, res: Response) => {
+router.get('/communities/:id/members', requirePermission('communities.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
-    const members = db.prepare(`
+    const members = await adapter.query(`
       SELECT cm.id, cm.role as community_role, cm.joined_at, u.id as user_id, u.full_name, u.member_id, u.city
       FROM community_members cm
       JOIN users u ON cm.user_id = u.id
       WHERE cm.community_id = ?
       ORDER BY cm.joined_at DESC
-    `).all(id);
+    `, [id]);
     return res.json({ success: true, members });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -1488,10 +1564,11 @@ router.get('/communities/:id/members', requirePermission('communities.manage'), 
 // 5. CENTRALIZED AUCTION MANAGEMENT & LIVE MONITOR
 // =========================================================================
 
-router.get('/auctions', requirePermission('auctions.view'), (req: AuthRequest, res: Response) => {
+router.get('/auctions', requirePermission('auctions.view'), async (req: AuthRequest, res: Response) => {
   try {
-    const auctions = db.prepare(`
-      SELECT 
+    const adapter = getDatabaseAdapter();
+    const auctions = await adapter.query(`
+      SELECT
         a.*,
         e.title as event_title,
         e.event_date,
@@ -1510,9 +1587,9 @@ router.get('/auctions', requirePermission('auctions.view'), (req: AuthRequest, r
       JOIN venues v ON e.venue_id = v.id
       LEFT JOIN auction_players cp ON a.current_player_id = cp.id
       ORDER BY CASE a.status WHEN 'LIVE' THEN 1 WHEN 'PAUSED' THEN 2 WHEN 'SCHEDULED' THEN 3 ELSE 4 END, a.created_at DESC
-    `).all();
+    `);
 
-    const recentBids = db.prepare(`
+    const recentBids = await adapter.query(`
       SELECT b.id, b.auction_id, b.amount, b.placed_at, p.name as player_name, t.name as team_name, a.title as auction_title
       FROM bids b
       JOIN auction_players p ON b.player_id = p.id
@@ -1520,7 +1597,7 @@ router.get('/auctions', requirePermission('auctions.view'), (req: AuthRequest, r
       JOIN auction_rooms a ON b.auction_id = a.id
       ORDER BY b.placed_at DESC
       LIMIT 12
-    `).all();
+    `);
 
     return res.json({ success: true, auctions, recentBids });
   } catch (err: any) {
@@ -1528,24 +1605,24 @@ router.get('/auctions', requirePermission('auctions.view'), (req: AuthRequest, r
   }
 });
 
-router.post('/auctions', requirePermission('auctions.manage'), (req: AuthRequest, res: Response) => {
+router.post('/auctions', requirePermission('auctions.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { event_id, title, format_type, format_category, team_purse_cap, min_bid_increment, max_squad_size, overseas_limit, countdown_seconds } = req.body;
     if (!event_id || !title) return res.status(400).json({ error: 'event_id and title are required' });
 
-    const existing = db.prepare('SELECT id FROM auction_rooms WHERE event_id = ?').get(event_id);
+    const existing = await adapter.queryOne('SELECT id FROM auction_rooms WHERE event_id = ?', [event_id]);
     if (existing) return res.status(409).json({ error: 'An auction room already exists for this event.' });
 
     const id = 'auc_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO auction_rooms (
         id, event_id, title, format_type, format_category, status,
         countdown_seconds, auto_extend_seconds, min_bid_increment,
         max_squad_size, min_squad_size, team_purse_cap, overseas_limit
       )
       VALUES (?, ?, ?, ?, ?, 'SCHEDULED', ?, 15, ?, ?, 5, ?, ?)
-    `).run(
-      id,
+    `, [id,
       event_id,
       title.trim(),
       format_type || 'stroom_premier',
@@ -1554,11 +1631,10 @@ router.post('/auctions', requirePermission('auctions.manage'), (req: AuthRequest
       Number(min_bid_increment) || 25000,
       Number(max_squad_size) || 15,
       Number(team_purse_cap) || 10000000,
-      Number(overseas_limit) || 4
-    );
+      Number(overseas_limit) || 4]);
 
-    const auction = db.prepare('SELECT * FROM auction_rooms WHERE id = ?').get(id);
-    recordAuditLog({
+    const auction = await adapter.queryOne('SELECT * FROM auction_rooms WHERE id = ?', [id]);
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1578,10 +1654,11 @@ router.post('/auctions', requirePermission('auctions.manage'), (req: AuthRequest
 // 6. CENTRALIZED VENUE MANAGEMENT
 // =========================================================================
 
-router.get('/venues', requirePermission('venues.manage'), (req: AuthRequest, res: Response) => {
+router.get('/venues', requirePermission('venues.manage'), async (req: AuthRequest, res: Response) => {
   try {
-    const venues = db.prepare(`
-      SELECT 
+    const adapter = getDatabaseAdapter();
+    const venues = await adapter.query(`
+      SELECT
         v.*,
         c.name as city_name,
         p.business_name as partner_name,
@@ -1592,28 +1669,29 @@ router.get('/venues', requirePermission('venues.manage'), (req: AuthRequest, res
       JOIN cities c ON v.city_id = c.id
       LEFT JOIN partner_accounts p ON v.partner_id = p.id
       ORDER BY v.is_verified DESC, v.created_at DESC
-    `).all();
+    `);
     return res.json({ success: true, venues });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-router.patch('/venues/:id/verify', requirePermission('venues.manage'), (req: AuthRequest, res: Response) => {
+router.patch('/venues/:id/verify', requirePermission('venues.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const { is_verified, status } = req.body;
-    const venue = db.prepare('SELECT * FROM venues WHERE id = ?').get(id) as any;
+    const venue = await adapter.queryOne('SELECT * FROM venues WHERE id = ?', [id]) as any;
     if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
-    db.prepare(`
+    await adapter.execute(`
       UPDATE venues
       SET is_verified = COALESCE(?, is_verified),
           status = COALESCE(?, status)
       WHERE id = ?
-    `).run(is_verified !== undefined ? (is_verified ? 1 : 0) : null, status || null, id);
+    `, [is_verified !== undefined ? (is_verified ? 1 : 0) : null, status || null, id]);
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1624,7 +1702,7 @@ router.patch('/venues/:id/verify', requirePermission('venues.manage'), (req: Aut
       afterData: { is_verified, status },
     });
 
-    const updated = db.prepare('SELECT * FROM venues WHERE id = ?').get(id);
+    const updated = await adapter.queryOne('SELECT * FROM venues WHERE id = ?', [id]);
     return res.json({ success: true, venue: updated });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -1635,10 +1713,11 @@ router.patch('/venues/:id/verify', requirePermission('venues.manage'), (req: Aut
 // 7. UPGRADED DOOR CHECK-IN OPERATIONS
 // =========================================================================
 
-router.get('/checkin/events', requirePermission('checkin.access'), (req: AuthRequest, res: Response) => {
+router.get('/checkin/events', requirePermission('checkin.access'), async (req: AuthRequest, res: Response) => {
   try {
-    const events = db.prepare(`
-      SELECT 
+    const adapter = getDatabaseAdapter();
+    const events = await adapter.query(`
+      SELECT
         e.id, e.title, e.event_date, e.event_time, e.status, v.name as venue_name, c.name as city_name,
         (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status != 'cancelled') as registered_count,
         (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status = 'checked_in') as checked_in_count
@@ -1647,10 +1726,10 @@ router.get('/checkin/events', requirePermission('checkin.access'), (req: AuthReq
       JOIN cities c ON e.city_id = c.id
       WHERE e.status IN ('published', 'live', 'completed')
       ORDER BY e.is_flagship DESC, e.created_at DESC
-    `).all();
+    `);
 
-    const recentCheckins = db.prepare(`
-      SELECT 
+    const recentCheckins = await adapter.query(`
+      SELECT
         r.id, r.pass_code, r.checkin_status, r.checked_in_at, r.seat_tier,
         u.full_name as attendee_name, u.avatar_url, e.id as event_id, e.title as event_title,
         staff.full_name as checked_in_by_name
@@ -1661,7 +1740,7 @@ router.get('/checkin/events', requirePermission('checkin.access'), (req: AuthReq
       WHERE r.checkin_status = 'checked_in'
       ORDER BY r.checked_in_at DESC
       LIMIT 20
-    `).all();
+    `);
 
     return res.json({ success: true, events, recentCheckins });
   } catch (err: any) {
@@ -1669,11 +1748,12 @@ router.get('/checkin/events', requirePermission('checkin.access'), (req: AuthReq
   }
 });
 
-router.get('/checkin/search', requirePermission('checkin.access'), (req: AuthRequest, res: Response) => {
+router.get('/checkin/search', requirePermission('checkin.access'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { eventId, q } = req.query as Record<string, string>;
     let query = `
-      SELECT 
+      SELECT
         r.id, r.event_id, r.pass_code, r.qr_token, r.seat_tier, r.role_type, r.checkin_status, r.checked_in_at,
         u.full_name as attendee_name, u.avatar_url, u.member_id, e.title as event_title
       FROM event_registrations r
@@ -1692,23 +1772,24 @@ router.get('/checkin/search', requirePermission('checkin.access'), (req: AuthReq
       params.push(like, like, like, like);
     }
     query += ' ORDER BY r.created_at DESC LIMIT 40';
-    const passes = db.prepare(query).all(...params);
+    const passes = await adapter.query(query, params);
     return res.json({ success: true, passes });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/checkin/scan', requirePermission('checkin.access'), (req: AuthRequest, res: Response) => {
+router.post('/checkin/scan', requirePermission('checkin.access'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { code, event_id } = req.body;
     if (!code || !String(code).trim()) {
       return res.status(400).json({ verificationStatus: 'Invalid Pass', error: 'Pass code, QR token, or Registration ID is required.' });
     }
     const clean = String(code).trim();
 
-    const pass = db.prepare(`
-      SELECT 
+    const pass = await adapter.queryOne(`
+      SELECT
         r.*, e.title as event_title, e.category as event_category, c.name as city_name, v.name as venue_name,
         u.full_name as attendee_name, u.avatar_url as attendee_avatar
       FROM event_registrations r
@@ -1717,7 +1798,7 @@ router.post('/checkin/scan', requirePermission('checkin.access'), (req: AuthRequ
       JOIN venues v ON e.venue_id = v.id
       JOIN users u ON r.user_id = u.id
       WHERE UPPER(r.pass_code) = UPPER(?) OR r.qr_token = ? OR r.id = ?
-    `).get(clean, clean, clean) as any;
+    `, [clean, clean, clean]) as any;
 
     if (!pass) {
       return res.status(404).json({ verificationStatus: 'Invalid Pass', error: 'No matching event registration found for this code.' });
@@ -1746,21 +1827,21 @@ router.post('/checkin/scan', requirePermission('checkin.access'), (req: AuthRequ
     const stampId = 'stamp_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
     const stampIcon = pass.event_category?.includes('auction') ? 'Trophy' : pass.event_category?.includes('sport') ? 'Activity' : 'Award';
 
-    db.transaction(() => {
-      db.prepare(`
+    await adapter.transaction(async (tx) => {
+      await tx.execute(`
         UPDATE event_registrations
-        SET checkin_status = 'checked_in', checked_in_at = datetime('now'), checked_in_by = ?
+        SET checkin_status = 'checked_in', checked_in_at = CURRENT_TIMESTAMP, checked_in_by = ?
         WHERE id = ?
-      `).run(req.user!.id, pass.id);
+      `, [req.user!.id, pass.id]);
 
-      db.prepare(`
+      await tx.execute(`
         INSERT OR IGNORE INTO passport_stamps (id, user_id, event_id, event_title, category, city_name, venue_name, stamp_icon, verified_at, verified_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)
-      `).run(stampId, pass.user_id, pass.event_id, pass.event_title, pass.event_category, pass.city_name, pass.venue_name, stampIcon, req.user!.id);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      `, [stampId, pass.user_id, pass.event_id, pass.event_title, pass.event_category, pass.city_name, pass.venue_name, stampIcon, req.user!.id]);
 
-      logActivity(pass.user_id, 'event_attended', `Attended: ${pass.event_title}`, `Verified door check-in at ${pass.venue_name}.`, pass.event_id);
-      createNotification(pass.user_id, 'checkin', `Attendance Verified: ${pass.event_title}`, `Your STROOM Passport stamp has been verified at the door!`, { eventId: pass.event_id });
-      recordAuditLog({
+      await logActivity(pass.user_id, 'event_attended', `Attended: ${pass.event_title}`, `Verified door check-in at ${pass.venue_name}.`, pass.event_id);
+      await createNotification(pass.user_id, 'checkin', `Attendance Verified: ${pass.event_title}`, `Your STROOM Passport stamp has been verified at the door!`, { eventId: pass.event_id });
+      await recordAuditLog({
         actorId: req.user!.id,
         actorName: req.user!.full_name,
         actorRole: req.user!.role,
@@ -1769,10 +1850,10 @@ router.post('/checkin/scan', requirePermission('checkin.access'), (req: AuthRequ
         entityId: pass.id,
         afterData: { pass_code: pass.pass_code, event_id: pass.event_id },
       });
-    })();
+    });
 
-    const newlyUnlocked = evaluateUserAchievements(pass.user_id);
-    const updatedPass = db.prepare('SELECT checked_in_at FROM event_registrations WHERE id = ?').get(pass.id) as any;
+    const newlyUnlocked = await evaluateUserAchievements(pass.user_id);
+    const updatedPass = await adapter.queryOne('SELECT checked_in_at FROM event_registrations WHERE id = ?', [pass.id]) as any;
 
     return res.json({
       success: true,
@@ -1786,22 +1867,23 @@ router.post('/checkin/scan', requirePermission('checkin.access'), (req: AuthRequ
   }
 });
 
-router.post('/checkin/override', requirePermission('checkin.override'), (req: AuthRequest, res: Response) => {
+router.post('/checkin/override', requirePermission('checkin.override'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { registration_id, new_status, reason } = req.body;
     if (!registration_id || !['confirmed', 'checked_in'].includes(new_status) || !reason) {
       return res.status(400).json({ error: 'registration_id, new_status, and mandatory audit reason are required' });
     }
-    const pass = db.prepare('SELECT * FROM event_registrations WHERE id = ?').get(registration_id) as any;
+    const pass = await adapter.queryOne('SELECT * FROM event_registrations WHERE id = ?', [registration_id]) as any;
     if (!pass) return res.status(404).json({ error: 'Registration not found' });
 
-    db.prepare(`
+    await adapter.execute(`
       UPDATE event_registrations
-      SET checkin_status = ?, checked_in_at = CASE WHEN ? = 'confirmed' THEN NULL ELSE COALESCE(checked_in_at, datetime('now')) END
+      SET checkin_status = ?, checked_in_at = CASE WHEN ? = 'confirmed' THEN NULL ELSE COALESCE(checked_in_at, CURRENT_TIMESTAMP) END
       WHERE id = ?
-    `).run(new_status, new_status, registration_id);
+    `, [new_status, new_status, registration_id]);
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1822,8 +1904,9 @@ router.post('/checkin/override', requirePermission('checkin.override'), (req: Au
 // 8. COMMUNITY FEED MODERATION
 // =========================================================================
 
-router.get('/moderation/posts', requirePermission('moderation.manage'), (req: AuthRequest, res: Response) => {
+router.get('/moderation/posts', requirePermission('moderation.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { status, search } = req.query as Record<string, string>;
     let query = `
       SELECT p.*, c.name as community_name, u.account_status as author_account_status
@@ -1844,15 +1927,16 @@ router.get('/moderation/posts', requirePermission('moderation.manage'), (req: Au
     }
     query += " ORDER BY CASE p.status WHEN 'Reported' THEN 1 WHEN 'Pending' THEN 2 WHEN 'Under Review' THEN 3 ELSE 4 END, p.created_at DESC";
 
-    const posts = db.prepare(query).all(...params);
+    const posts = await adapter.query(query, params);
     return res.json({ success: true, posts });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-router.patch('/moderation/posts/:id', requirePermission('moderation.manage'), (req: AuthRequest, res: Response) => {
+router.patch('/moderation/posts/:id', requirePermission('moderation.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const { status, moderation_notes, suspend_author } = req.body;
     const validStatuses = ['Pending', 'Published', 'Reported', 'Under Review', 'Removed', 'Archived'];
@@ -1860,24 +1944,24 @@ router.patch('/moderation/posts/:id', requirePermission('moderation.manage'), (r
       return res.status(400).json({ error: 'Invalid post moderation status' });
     }
 
-    const post = db.prepare('SELECT * FROM community_posts WHERE id = ?').get(id) as any;
+    const post = await adapter.queryOne('SELECT * FROM community_posts WHERE id = ?', [id]) as any;
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
-    db.transaction(() => {
-      db.prepare(`
+    await adapter.transaction(async (tx) => {
+      await tx.execute(`
         UPDATE community_posts
-        SET status = ?, moderated_by = ?, moderation_notes = COALESCE(?, moderation_notes), updated_at = datetime('now')
+        SET status = ?, moderated_by = ?, moderation_notes = COALESCE(?, moderation_notes), updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(status, req.user!.id, moderation_notes || null, id);
+      `, [status, req.user!.id, moderation_notes || null, id]);
 
       if (suspend_author && post.author_user_id) {
         if (!hasPermission(req.user!.role, 'members.manage')) {
           throw Object.assign(new Error('Missing members.manage permission to suspend post author'), { status: 403 });
         }
-        db.prepare("UPDATE users SET account_status = 'suspended' WHERE id = ? AND role = 'user'").run(post.author_user_id);
+        await tx.execute("UPDATE users SET account_status = 'suspended' WHERE id = ? AND role = 'user'", [post.author_user_id]);
       }
 
-      recordAuditLog({
+      await recordAuditLog({
         actorId: req.user!.id,
         actorName: req.user!.full_name,
         actorRole: req.user!.role,
@@ -1887,9 +1971,9 @@ router.patch('/moderation/posts/:id', requirePermission('moderation.manage'), (r
         beforeData: { status: post.status },
         afterData: { status, moderation_notes, suspend_author: Boolean(suspend_author) },
       });
-    })();
+    });
 
-    const updated = db.prepare('SELECT * FROM community_posts WHERE id = ?').get(id);
+    const updated = await adapter.queryOne('SELECT * FROM community_posts WHERE id = ?', [id]);
     return res.json({ success: true, post: updated });
   } catch (err: any) {
     return res.status(err.status || 500).json({ error: err.message });
@@ -1900,11 +1984,12 @@ router.patch('/moderation/posts/:id', requirePermission('moderation.manage'), (r
 // 9. PAYMENTS & TRANSACTIONS (HONEST REAL LEDGER ONLY)
 // =========================================================================
 
-router.get('/payments', requirePermission('payments.view'), (req: AuthRequest, res: Response) => {
+router.get('/payments', requirePermission('payments.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { status } = req.query as Record<string, string>;
     let query = `
-      SELECT 
+      SELECT
         pt.*,
         u.full_name as member_name,
         u.member_id as member_code,
@@ -1921,7 +2006,7 @@ router.get('/payments', requirePermission('payments.view'), (req: AuthRequest, r
     }
     query += ' ORDER BY pt.created_at DESC LIMIT 100';
 
-    const transactions = db.prepare(query).all(...params);
+    const transactions = await adapter.query(query, params);
     return res.json({
       success: true,
       gatewayConfigured: false,
@@ -1933,11 +2018,12 @@ router.get('/payments', requirePermission('payments.view'), (req: AuthRequest, r
   }
 });
 
-router.post('/payments/:id/refund', requirePermission('payments.refund'), (req: AuthRequest, res: Response) => {
+router.post('/payments/:id/refund', requirePermission('payments.refund'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const { refund_amount, reason } = req.body;
-    const tx = db.prepare('SELECT * FROM payment_transactions WHERE id = ?').get(id) as any;
+    const tx = await adapter.queryOne('SELECT * FROM payment_transactions WHERE id = ?', [id]) as any;
     if (!tx) return res.status(404).json({ error: 'Transaction not found' });
     if (tx.status !== 'Successful') {
       return res.status(400).json({ error: 'Only Successful transactions can be refunded.' });
@@ -1949,13 +2035,13 @@ router.post('/payments/:id/refund', requirePermission('payments.refund'), (req: 
     }
 
     const nextStatus = amt < tx.amount ? 'Partially Refunded' : 'Refunded';
-    db.prepare(`
+    await adapter.execute(`
       UPDATE payment_transactions
-      SET status = ?, refund_amount = ?, refund_reason = ?, refunded_by = ?, refunded_at = datetime('now')
+      SET status = ?, refund_amount = ?, refund_reason = ?, refunded_by = ?, refunded_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(nextStatus, amt, reason || 'Admin refund processed', req.user!.id, id);
+    `, [nextStatus, amt, reason || 'Admin refund processed', req.user!.id, id]);
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -1966,7 +2052,7 @@ router.post('/payments/:id/refund', requirePermission('payments.refund'), (req: 
       afterData: { status: nextStatus, refund_amount: amt, reason },
     });
 
-    const updated = db.prepare('SELECT * FROM payment_transactions WHERE id = ?').get(id);
+    const updated = await adapter.queryOne('SELECT * FROM payment_transactions WHERE id = ?', [id]);
     return res.json({ success: true, transaction: updated });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -1977,17 +2063,19 @@ router.post('/payments/:id/refund', requirePermission('payments.refund'), (req: 
 // 10. NOTIFICATION MANAGEMENT (RESPECTING USER PREFERENCES)
 // =========================================================================
 
-router.get('/notifications/announcements', requirePermission('notifications.manage'), (req: AuthRequest, res: Response) => {
+router.get('/notifications/announcements', requirePermission('notifications.manage'), async (req: AuthRequest, res: Response) => {
   try {
-    const announcements = db.prepare('SELECT * FROM admin_announcements ORDER BY created_at DESC LIMIT 50').all();
+    const adapter = getDatabaseAdapter();
+    const announcements = await adapter.query('SELECT * FROM admin_announcements ORDER BY created_at DESC LIMIT 50');
     return res.json({ success: true, announcements });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/notifications/broadcast', requirePermission('notifications.manage'), (req: AuthRequest, res: Response) => {
+router.post('/notifications/broadcast', requirePermission('notifications.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { title, message, target_audience, target_filter, category } = req.body;
     if (!title || !message) return res.status(400).json({ error: 'Title and message are required' });
 
@@ -1996,19 +2084,19 @@ router.post('/notifications/broadcast', requirePermission('notifications.manage'
     const dedupKey = crypto.createHash('md5').update(`${title.trim()}|${audience}|${target_filter || ''}`).digest('hex');
 
     // Prevent exact duplicate broadcast within same hour
-    const recentDup = db.prepare(`
+    const recentDup = await adapter.queryOne(`
       SELECT id FROM admin_announcements
       WHERE title = ? AND target_audience = ? AND datetime(created_at) >= datetime('now', '-1 hour')
-    `).get(title.trim(), audience);
+    `, [title.trim(), audience]);
     if (recentDup) {
       return res.status(409).json({ error: 'A duplicate announcement with the same title and audience was already sent within the last hour.' });
     }
 
-    db.transaction(() => {
+    await adapter.transaction(async (tx) => {
       if (audience === 'partners') {
-        const partners = db.prepare("SELECT id FROM partner_accounts WHERE verification_status != 'Suspended'").all() as { id: string }[];
+        const partners = await tx.query("SELECT id FROM partner_accounts WHERE verification_status != 'Suspended'") as { id: string }[];
         for (const p of partners) {
-          notifyPartner(p.id, 'announcement', title.trim(), message.trim(), req.user!.full_name, 'admin');
+          await notifyPartner(p.id, 'announcement', title.trim(), message.trim(), req.user!.full_name, 'admin');
           deliveredCount++;
         }
       } else {
@@ -2035,24 +2123,24 @@ router.post('/notifications/broadcast', requirePermission('notifications.manage'
           params.push(target_filter);
         }
 
-        const users = db.prepare(userQuery).all(...params) as any[];
+        const users = await tx.query(userQuery, params) as any[];
         for (const u of users) {
           let prefs: any = {};
           try { prefs = JSON.parse(u.notification_settings_json || '{}'); } catch {}
           if (category === 'community' && prefs.communityUpdates === false) continue;
           if (category === 'reminder' && prefs.eventReminders === false) continue;
-          createNotification(u.id, category || 'system', title.trim(), message.trim(), { dedupKey });
+          await createNotification(u.id, category || 'system', title.trim(), message.trim(), { dedupKey });
           deliveredCount++;
         }
       }
 
       const annId = 'ann_' + crypto.randomUUID().replace(/-/g, '').slice(0, 14);
-      db.prepare(`
+      await tx.execute(`
         INSERT INTO admin_announcements (id, title, message, target_audience, target_filter, channel, status, recipients_count, created_by, created_by_name)
         VALUES (?, ?, ?, ?, ?, 'in_app', 'sent', ?, ?, ?)
-      `).run(annId, title.trim(), message.trim(), audience, target_filter || null, deliveredCount, req.user!.id, req.user!.full_name);
+      `, [annId, title.trim(), message.trim(), audience, target_filter || null, deliveredCount, req.user!.id, req.user!.full_name]);
 
-      recordAuditLog({
+      await recordAuditLog({
         actorId: req.user!.id,
         actorName: req.user!.full_name,
         actorRole: req.user!.role,
@@ -2061,7 +2149,7 @@ router.post('/notifications/broadcast', requirePermission('notifications.manage'
         entityId: annId,
         afterData: { title: title.trim(), target_audience: audience, deliveredCount },
       });
-    })();
+    });
 
     return res.status(201).json({
       success: true,
@@ -2077,8 +2165,9 @@ router.post('/notifications/broadcast', requirePermission('notifications.manage'
 // 11. PLATFORM ANALYTICS & CSV EXPORTS
 // =========================================================================
 
-router.get('/analytics', requirePermission('analytics.view'), (req: AuthRequest, res: Response) => {
+router.get('/analytics', requirePermission('analytics.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { range = '30d', from, to, city, category, status } = req.query as Record<string, string>;
 
     let fromDate: string | null = null;
@@ -2106,8 +2195,8 @@ router.get('/analytics', requirePermission('analytics.view'), (req: AuthRequest,
       eventParams.push(status);
     }
 
-    const cityActivity = db.prepare(`
-      SELECT 
+    const cityActivity = await adapter.query(`
+      SELECT
         c.name as city_name,
         COUNT(DISTINCT e.id) as events_count,
         COUNT(DISTINCT CASE WHEN r.checkin_status != 'cancelled' THEN r.id END) as registrations_count,
@@ -2118,10 +2207,10 @@ router.get('/analytics', requirePermission('analytics.view'), (req: AuthRequest,
       LEFT JOIN event_registrations r ON r.event_id = e.id
       GROUP BY c.id
       ORDER BY registrations_count DESC
-    `).all(...(city && city !== 'all' ? [city] : []));
+    `, (city && city !== 'all' ? [city] : []));
 
-    const categoryPerformance = db.prepare(`
-      SELECT 
+    const categoryPerformance = await adapter.query(`
+      SELECT
         e.category,
         COUNT(DISTINCT e.id) as events_count,
         COUNT(DISTINCT CASE WHEN r.checkin_status != 'cancelled' THEN r.id END) as registrations_count,
@@ -2131,18 +2220,18 @@ router.get('/analytics', requirePermission('analytics.view'), (req: AuthRequest,
       ${eventWhere}
       GROUP BY e.category
       ORDER BY registrations_count DESC
-    `).all(...eventParams);
+    `, eventParams);
 
-    const memberGrowth = db.prepare(`
+    const memberGrowth = await adapter.query(`
       SELECT date(created_at) as date, COUNT(*) as signups
       FROM users
       ${fromDate ? "WHERE date(created_at) >= date('" + fromDate + "')" : ''}
       GROUP BY date(created_at)
       ORDER BY date ASC
       LIMIT 30
-    `).all();
+    `);
 
-    const registrationTrends = db.prepare(`
+    const registrationTrends = await adapter.query(`
       SELECT date(r.created_at) as date,
         COUNT(*) as registrations,
         SUM(CASE WHEN r.checkin_status = 'checked_in' THEN 1 ELSE 0 END) as checkins
@@ -2151,13 +2240,13 @@ router.get('/analytics', requirePermission('analytics.view'), (req: AuthRequest,
       GROUP BY date(r.created_at)
       ORDER BY date ASC
       LIMIT 30
-    `).all();
+    `);
 
     const partnerAndCampaignStats = {
-      verifiedPartners: (db.prepare("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status = 'Verified'").get() as any).c,
-      activeCollaborations: (db.prepare("SELECT COUNT(*) as c FROM partner_collaborations WHERE status IN ('Approved', 'Scheduled', 'Live', 'Completed')").get() as any).c,
-      totalCouponRedemptions: (db.prepare('SELECT COUNT(*) as c FROM coupon_redemptions').get() as any).c,
-      totalBidsPlaced: (db.prepare('SELECT COUNT(*) as c FROM bids').get() as any).c,
+      verifiedPartners: (await adapter.queryOne("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status = 'Verified'") as any).c,
+      activeCollaborations: (await adapter.queryOne("SELECT COUNT(*) as c FROM partner_collaborations WHERE status IN ('Approved', 'Scheduled', 'Live', 'Completed')") as any).c,
+      totalCouponRedemptions: (await adapter.queryOne('SELECT COUNT(*) as c FROM coupon_redemptions') as any).c,
+      totalBidsPlaced: (await adapter.queryOne('SELECT COUNT(*) as c FROM bids') as any).c,
     };
 
     return res.json({
@@ -2174,8 +2263,9 @@ router.get('/analytics', requirePermission('analytics.view'), (req: AuthRequest,
   }
 });
 
-router.get('/reports/export', requirePermission('analytics.view'), (req: AuthRequest, res: Response) => {
+router.get('/reports/export', requirePermission('analytics.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const type = String(req.query.type || 'events');
     const esc = (v: any) => `"${(v ?? '').toString().replace(/"/g, '""')}"`;
 
@@ -2184,46 +2274,46 @@ router.get('/reports/export', requirePermission('analytics.view'), (req: AuthReq
 
     if (type === 'members') {
       headers = ['ID', 'Member ID', 'Name', 'Role', 'City', 'Account Status', 'Joined'];
-      const data = db.prepare("SELECT id, member_id, full_name, role, city, COALESCE(account_status, 'active') as account_status, created_at FROM users").all() as any[];
+      const data = await adapter.query("SELECT id, member_id, full_name, role, city, COALESCE(account_status, 'active') as account_status, created_at FROM users") as any[];
       rows = data.map((r) => [esc(r.id), esc(r.member_id), esc(r.full_name), esc(r.role), esc(r.city), esc(r.account_status), esc(r.created_at)].join(','));
     } else if (type === 'registrations' || type === 'attendance') {
       headers = ['Registration ID', 'Pass Code', 'Event', 'Participant', 'Seat Tier', 'Status', 'Checked In At', 'Registered At'];
-      const data = db.prepare(`
+      const data = await adapter.query(`
         SELECT r.id, r.pass_code, e.title as event_title, u.full_name, r.seat_tier, r.checkin_status, r.checked_in_at, r.created_at
         FROM event_registrations r
         JOIN events e ON r.event_id = e.id
         JOIN users u ON r.user_id = u.id
-      `).all() as any[];
+      `) as any[];
       rows = data.map((r) => [esc(r.id), esc(r.pass_code), esc(r.event_title), esc(r.full_name), esc(r.seat_tier), esc(r.checkin_status), esc(r.checked_in_at), esc(r.created_at)].join(','));
     } else if (type === 'partners') {
       headers = ['Partner ID', 'Business Name', 'Category', 'City', 'Verification Status', 'Partnership Start'];
-      const data = db.prepare('SELECT id, business_name, category, city, verification_status, partnership_start_date FROM partner_accounts').all() as any[];
+      const data = await adapter.query('SELECT id, business_name, category, city, verification_status, partnership_start_date FROM partner_accounts') as any[];
       rows = data.map((r) => [esc(r.id), esc(r.business_name), esc(r.category), esc(r.city), esc(r.verification_status), esc(r.partnership_start_date)].join(','));
     } else if (type === 'campaigns') {
       headers = ['Coupon Code', 'Title', 'Offer Value', 'Approval Status', 'Actual Redemptions', 'Max Redemptions', 'Valid Until'];
-      const data = db.prepare('SELECT code, title, discount_value, approval_status, actual_redemptions, max_redemptions, valid_until FROM coupons').all() as any[];
+      const data = await adapter.query('SELECT code, title, discount_value, approval_status, actual_redemptions, max_redemptions, valid_until FROM coupons') as any[];
       rows = data.map((r) => [esc(r.code), esc(r.title), esc(r.discount_value), esc(r.approval_status), esc(r.actual_redemptions), esc(r.max_redemptions), esc(r.valid_until)].join(','));
     } else if (type === 'auctions') {
       headers = ['Auction ID', 'Title', 'Format', 'Status', 'Total Teams', 'Sold Players'];
-      const data = db.prepare(`
+      const data = await adapter.query(`
         SELECT a.id, a.title, a.format_type, a.status,
           (SELECT COUNT(*) FROM auction_teams WHERE auction_id = a.id) as teams,
           (SELECT COUNT(*) FROM auction_players WHERE auction_id = a.id AND status = 'SOLD') as sold
         FROM auction_rooms a
-      `).all() as any[];
+      `) as any[];
       rows = data.map((r) => [esc(r.id), esc(r.title), esc(r.format_type), esc(r.status), esc(r.teams), esc(r.sold)].join(','));
     } else {
       headers = ['Event ID', 'Title', 'Category', 'Date', 'Status', 'Capacity', 'Confirmed', 'Verified Check-Ins'];
-      const data = db.prepare(`
+      const data = await adapter.query(`
         SELECT e.id, e.title, e.category, e.event_date, e.status, e.seats_total,
           (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status != 'cancelled') as confirmed,
           (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status = 'checked_in') as checkins
         FROM events e
-      `).all() as any[];
+      `) as any[];
       rows = data.map((r) => [esc(r.id), esc(r.title), esc(r.category), esc(r.event_date), esc(r.status), esc(r.seats_total), esc(r.confirmed), esc(r.checkins)].join(','));
     }
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -2246,9 +2336,10 @@ router.get('/reports/export', requirePermission('analytics.view'), (req: AuthReq
 // 12. PLATFORM SETTINGS & IMMUTABLE AUDIT LOGS
 // =========================================================================
 
-router.get('/settings', requirePermission('settings.manage'), (req: AuthRequest, res: Response) => {
+router.get('/settings', requirePermission('settings.manage'), async (req: AuthRequest, res: Response) => {
   try {
-    const rows = db.prepare('SELECT * FROM platform_settings ORDER BY category ASC').all() as any[];
+    const adapter = getDatabaseAdapter();
+    const rows = await adapter.query('SELECT * FROM platform_settings ORDER BY category ASC') as any[];
     const settings: Record<string, any> = {};
     for (const r of rows) {
       try {
@@ -2263,21 +2354,22 @@ router.get('/settings', requirePermission('settings.manage'), (req: AuthRequest,
   }
 });
 
-router.put('/settings', requirePermission('settings.manage'), (req: AuthRequest, res: Response) => {
+router.put('/settings', requirePermission('settings.manage'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { key, value } = req.body;
     if (!key || !value || typeof value !== 'object') {
       return res.status(400).json({ error: 'Setting key and value object are required' });
     }
-    const existing = db.prepare('SELECT * FROM platform_settings WHERE key = ?').get(key) as any;
+    const existing = await adapter.queryOne('SELECT * FROM platform_settings WHERE key = ?', [key]) as any;
     if (!existing) return res.status(404).json({ error: 'Setting category not found' });
 
     const beforeVal = JSON.parse(existing.value_json || '{}');
-    db.prepare(`
-      UPDATE platform_settings SET value_json = ?, updated_by = ?, updated_at = datetime('now') WHERE key = ?
-    `).run(JSON.stringify(value), req.user!.full_name, key);
+    await adapter.execute(`
+      UPDATE platform_settings SET value_json = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?
+    `, [JSON.stringify(value), req.user!.full_name, key]);
 
-    recordAuditLog({
+    await recordAuditLog({
       actorId: req.user!.id,
       actorName: req.user!.full_name,
       actorRole: req.user!.role,
@@ -2294,8 +2386,9 @@ router.put('/settings', requirePermission('settings.manage'), (req: AuthRequest,
   }
 });
 
-router.get('/audit-logs', requirePermission('auditlogs.view'), (req: AuthRequest, res: Response) => {
+router.get('/audit-logs', requirePermission('auditlogs.view'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { action, entity_type, actor, limit = '100' } = req.query as Record<string, string>;
     let query = `
       SELECT a.*, COALESCE(a.actor_name, u.full_name, 'System') as resolved_actor_name
@@ -2319,7 +2412,7 @@ router.get('/audit-logs', requirePermission('auditlogs.view'), (req: AuthRequest
     query += ' ORDER BY a.created_at DESC LIMIT ?';
     params.push(Math.min(250, Math.max(10, Number(limit) || 100)));
 
-    const logs = db.prepare(query).all(...params);
+    const logs = await adapter.query(query, params);
     return res.json({ success: true, logs });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -2327,7 +2420,7 @@ router.get('/audit-logs', requirePermission('auditlogs.view'), (req: AuthRequest
 });
 
 // Explicitly protect audit logs from modification or deletion
-router.all('/audit-logs*', (req: AuthRequest, res: Response) => {
+router.all('/audit-logs*', async (req: AuthRequest, res: Response) => {
   return res.status(403).json({ error: 'Audit logs are immutable and cannot be modified or deleted.' });
 });
 

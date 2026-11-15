@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { config, validateEnvironment } from './config/env';
-import { initDatabase, db } from './db/database';
+import { initDatabase } from './db/database';
+import { getDatabaseAdapter, getActiveDriver } from './db/adapter';
 import { securityHeaders, globalErrorHandler } from './middleware/security';
+import { originProxyAuthMiddleware } from './middleware/originProxyAuth';
 import authRouter from './routes/auth';
 import onboardingRouter from './routes/onboarding';
 import discoveryRouter from './routes/discovery';
@@ -42,14 +44,17 @@ app.use(
 );
 app.use(express.json({ limit: '2mb' }));
 
-// Initialize SQLite database and seed initial data
-initDatabase();
+// Initialize SQLite database and seed initial data (SQLite driver only)
+if (getActiveDriver() === 'sqlite') {
+  initDatabase();
+}
 
-// Health Check (verifies live SQLite connectivity & operational status)
-app.get('/api/health', (req, res) => {
+// Health Check (verifies live database connectivity & operational status)
+app.get('/api/health', async (req, res) => {
   try {
-    const dbCheck = db.prepare('SELECT 1 as ok').get() as { ok: number } | undefined;
-    if (!dbCheck || dbCheck.ok !== 1) {
+    const adapter = getDatabaseAdapter();
+    const ok = await adapter.ping();
+    if (!ok) {
       return res.status(503).json({ status: 'degraded', database: 'unreachable', timestamp: new Date().toISOString() });
     }
     return res.json({
@@ -76,7 +81,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth', authRouter);
+app.use('/api/auth', originProxyAuthMiddleware, authRouter);
 app.use('/api/onboarding', onboardingRouter);
 app.use('/api/discovery', discoveryRouter);
 app.use('/api/users', preferencesRouter);

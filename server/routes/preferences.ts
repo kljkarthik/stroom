@@ -1,9 +1,10 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { db, hashPassword, verifyPassword } from '../db/database';
-import { requireAuth, requirePermission, AuthRequest, requireAdmin } from '../middleware/auth';
+import { getDatabaseAdapter } from '../db/adapter';
+import { hashPassword, verifyPassword } from '../db/database';
+import { requireAuth, requirePermission, AuthRequest } from '../middleware/auth';
 import { PRIVILEGED_ROLES } from '../services/rbacService';
-import { User, UserAchievement } from '../types';
+import { UserAchievement } from '../types';
 import {
   calculateProfileCompletion,
   evaluateUserAchievements,
@@ -13,6 +14,7 @@ import {
 import { validateSafeMediaUrl, sendSafeServerError } from '../services/securityService';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { config } from '../config/env';
+import { d1BridgeClient } from '../services/d1BridgeClient';
 
 const router = Router();
 const passwordRateLimiter = createRateLimiter({
@@ -23,22 +25,23 @@ const passwordRateLimiter = createRateLimiter({
 });
 
 // GET /api/users/me/preferences
-router.get('/me/preferences', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/me/preferences', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
-    const prefs = db.prepare(`
+    const prefs = await adapter.query<any>(`
       SELECT p.id, p.preference_key, p.preference_value, p.source, p.updated_at
       FROM user_preferences p
       WHERE p.user_id = ?
-    `).all(userId) as any[];
+    `, [userId]);
 
     // Extract tags
     const tags = prefs.map((p) => p.preference_value);
 
     // Map tags to friendly option labels if possible
-    const options = db.prepare(`
+    const options = await adapter.query<{ stable_value: string; label: string }>(`
       SELECT DISTINCT stable_value, label FROM options WHERE is_active = 1
-    `).all() as { stable_value: string; label: string }[];
+    `);
 
     const labelMap: Record<string, string> = {};
     for (const opt of options) {
@@ -65,8 +68,9 @@ router.get('/me/preferences', requireAuth, (req: AuthRequest, res: Response) => 
 });
 
 // PUT /api/users/me/preferences
-router.put('/me/preferences', requireAuth, (req: AuthRequest, res: Response) => {
+router.put('/me/preferences', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
     const { tags } = req.body;
 
@@ -74,28 +78,26 @@ router.put('/me/preferences', requireAuth, (req: AuthRequest, res: Response) => 
       return res.status(400).json({ error: 'Tags array is required' });
     }
 
-    db.transaction(() => {
+    await adapter.transaction(async (tx) => {
       // Clear existing preferences
-      db.prepare('DELETE FROM user_preferences WHERE user_id = ?').run(userId);
-
-      const insertPref = db.prepare(`
-        INSERT INTO user_preferences (id, user_id, preference_key, preference_value, source, updated_at)
-        VALUES (?, ?, 'vibe_tag', ?, 'manual_profile', datetime('now'))
-      `);
+      await tx.execute('DELETE FROM user_preferences WHERE user_id = ?', [userId]);
 
       for (const tag of tags) {
         if (typeof tag === 'string' && tag.trim()) {
           const prefId = 'pref_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-          insertPref.run(prefId, userId, tag.trim().toLowerCase());
+          await tx.execute(`
+            INSERT INTO user_preferences (id, user_id, preference_key, preference_value, source, updated_at)
+            VALUES (?, ?, 'vibe_tag', ?, 'manual_profile', CURRENT_TIMESTAMP)
+          `, [prefId, userId, tag.trim().toLowerCase()]);
         }
       }
 
       // Also sync into users.interests_json
-      db.prepare("UPDATE users SET interests_json = ? WHERE id = ?").run(JSON.stringify(tags), userId);
-    })();
+      await tx.execute("UPDATE users SET interests_json = ? WHERE id = ?", [JSON.stringify(tags), userId]);
+    });
 
     // Evaluate potential Pioneer Member badge
-    evaluateUserAchievements(userId);
+    await evaluateUserAchievements(userId);
 
     return res.json({
       message: 'Preferences updated successfully',
@@ -108,17 +110,18 @@ router.put('/me/preferences', requireAuth, (req: AuthRequest, res: Response) => 
 });
 
 // GET /api/users/me/profile (Comprehensive Authenticated User Profile & Phase 4 Ecosystem)
-router.get('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/me/profile', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
 
-    let user = db.prepare(`
-      SELECT 
+    let user = await adapter.queryOne<any>(`
+      SELECT
         id, email, full_name, display_name, first_name, last_name, avatar_url, cover_url,
         role, member_id, phone, city, bio, interests_json, is_public,
         privacy_settings_json, notification_settings_json, onboarding_status, created_at
       FROM users WHERE id = ?
-    `).get(userId) as any;
+    `, [userId]);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -129,7 +132,7 @@ router.get('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
       const cityCode = user.city?.toLowerCase().includes('pune') ? 'PUN' : 'HYD';
       const randomCode = Math.floor(1000 + Math.random() * 9000);
       const generatedMemberId = `STR-${cityCode}-${randomCode}`;
-      db.prepare('UPDATE users SET member_id = ? WHERE id = ?').run(generatedMemberId, userId);
+      await adapter.execute('UPDATE users SET member_id = ? WHERE id = ?', [generatedMemberId, userId]);
       user.member_id = generatedMemberId;
     }
 
@@ -153,24 +156,25 @@ router.get('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
     }
 
     // Evaluate any pending achievements on profile load
-    evaluateUserAchievements(userId);
+    await evaluateUserAchievements(userId);
 
     // Unlocked achievements
-    const achievements = db.prepare(`
+    const achievements = await adapter.query<UserAchievement>(`
       SELECT * FROM user_achievements WHERE user_id = ? ORDER BY unlocked_at DESC
-    `).all(userId) as UserAchievement[];
+    `, [userId]);
 
     // Passport Stamps (Verified past event check-ins from passport_stamps table)
-    const passportStamps = db.prepare(`
+    const passportStamps = await adapter.query<any>(`
       SELECT id, event_id, event_title, category as event_category, city_name, venue_name, stamp_icon, verified_at
       FROM passport_stamps
       WHERE user_id = ?
       ORDER BY verified_at DESC
-    `).all(userId);
+    `, [userId]);
 
-    // Real upcoming events (not cancelled, event_date >= current date)
-    const upcomingEvents = db.prepare(`
-      SELECT 
+    // Real upcoming events (not cancelled, event_date >= today)
+    const todayStr = new Date().toISOString().split('T')[0];
+    const upcomingEvents = await adapter.query<any>(`
+      SELECT
         r.id as pass_id,
         r.pass_code,
         r.qr_token,
@@ -191,13 +195,13 @@ router.get('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
       JOIN events e ON r.event_id = e.id
       JOIN cities c ON e.city_id = c.id
       JOIN venues v ON e.venue_id = v.id
-      WHERE r.user_id = ? AND r.checkin_status != 'cancelled' AND e.event_date >= date('now')
+      WHERE r.user_id = ? AND r.checkin_status != 'cancelled' AND e.event_date >= ?
       ORDER BY e.event_date ASC
-    `).all(userId);
+    `, [userId, todayStr]);
 
     // Real event history (completed or past)
-    const eventHistory = db.prepare(`
-      SELECT 
+    const eventHistory = await adapter.query<any>(`
+      SELECT
         r.id as pass_id,
         r.pass_code,
         r.checkin_status,
@@ -216,11 +220,11 @@ router.get('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
       JOIN venues v ON e.venue_id = v.id
       WHERE r.user_id = ?
       ORDER BY e.event_date DESC
-    `).all(userId);
+    `, [userId]);
 
     // Joined communities
-    const joinedCommunities = db.prepare(`
-      SELECT 
+    const joinedCommunities = await adapter.query<any>(`
+      SELECT
         c.id, c.name, c.slug, c.category, c.description, c.image_url, c.member_count,
         ci.name as city_name, cm.joined_at, cm.role as member_role
       FROM community_members cm
@@ -228,19 +232,20 @@ router.get('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
       JOIN cities ci ON c.city_id = ci.id
       WHERE cm.user_id = ?
       ORDER BY cm.joined_at DESC
-    `).all(userId);
+    `, [userId]);
 
     // Activity timeline
-    const activityTimeline = db.prepare(`
+    const activityTimeline = await adapter.query<any>(`
       SELECT id, activity_type, title, description, reference_id, created_at
       FROM activity_logs
       WHERE user_id = ?
       ORDER BY created_at DESC
       LIMIT 15
-    `).all(userId);
+    `, [userId]);
 
     // Unread notifications count
-    const unreadNotifs = (db.prepare('SELECT COUNT(*) as c FROM notifications WHERE user_id = ? AND is_read = 0').get(userId) as any)?.c || 0;
+    const unreadNotifsRow = await adapter.queryOne<any>('SELECT COUNT(*) as c FROM notifications WHERE user_id = ? AND is_read = 0', [userId]);
+    const unreadNotifs = unreadNotifsRow?.c || 0;
 
     // Aggregated real statistics
     const profileCompletion = calculateProfileCompletion(user);
@@ -280,8 +285,9 @@ router.get('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // PUT /api/users/me/profile (Update Profile Studio)
-router.put('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
+router.put('/me/profile', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
     const {
       full_name,
@@ -312,8 +318,8 @@ router.put('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
     const privacyJson = privacy_settings ? JSON.stringify(privacy_settings) : undefined;
     const notifJson = notification_settings ? JSON.stringify(notification_settings) : undefined;
 
-    db.prepare(`
-      UPDATE users 
+    await adapter.execute(`
+      UPDATE users
       SET full_name = COALESCE(?, full_name),
           display_name = COALESCE(?, display_name, full_name),
           first_name = COALESCE(?, first_name),
@@ -327,9 +333,9 @@ router.put('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
           is_public = COALESCE(?, is_public),
           privacy_settings_json = COALESCE(?, privacy_settings_json),
           notification_settings_json = COALESCE(?, notification_settings_json),
-          updated_at = datetime('now')
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(
+    `, [
       full_name,
       display_name,
       first_name,
@@ -344,33 +350,32 @@ router.put('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
       privacyJson,
       notifJson,
       userId
-    );
+    ]);
 
     // If interests were updated, also update user_preferences for recommendations
     if (Array.isArray(interests)) {
-      db.transaction(() => {
-        db.prepare("DELETE FROM user_preferences WHERE user_id = ? AND source = 'manual_profile'").run(userId);
-        const ins = db.prepare(`
-          INSERT INTO user_preferences (id, user_id, preference_key, preference_value, source, updated_at)
-          VALUES (?, ?, 'interest', ?, 'manual_profile', datetime('now'))
-        `);
+      await adapter.transaction(async (tx) => {
+        await tx.execute("DELETE FROM user_preferences WHERE user_id = ? AND source = 'manual_profile'", [userId]);
         for (const item of interests) {
           const prefId = 'pref_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-          ins.run(prefId, userId, String(item).toLowerCase());
+          await tx.execute(`
+            INSERT INTO user_preferences (id, user_id, preference_key, preference_value, source, updated_at)
+            VALUES (?, ?, 'interest', ?, 'manual_profile', CURRENT_TIMESTAMP)
+          `, [prefId, userId, String(item).toLowerCase()]);
         }
-      })();
+      });
     }
 
-    logActivity(userId, 'profile_updated', 'Profile Studio Updated', 'Updated profile information and preferences.');
-    evaluateUserAchievements(userId);
+    await logActivity(userId, 'profile_updated', 'Profile Studio Updated', 'Updated profile information and preferences.');
+    await evaluateUserAchievements(userId);
 
-    const updatedUser = db.prepare(`
-      SELECT 
+    const updatedUser = await adapter.queryOne<any>(`
+      SELECT
         id, email, full_name, display_name, first_name, last_name, avatar_url, cover_url,
         role, member_id, phone, city, bio, interests_json, is_public,
         privacy_settings_json, notification_settings_json, onboarding_status
       FROM users WHERE id = ?
-    `).get(userId) as any;
+    `, [userId]);
 
     try {
       updatedUser.interests = JSON.parse(updatedUser.interests_json || '[]');
@@ -392,8 +397,9 @@ router.put('/me/profile', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/users/me/change-password
-router.post('/me/change-password', requireAuth, passwordRateLimiter, (req: AuthRequest, res: Response) => {
+router.post('/me/change-password', requireAuth, passwordRateLimiter, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
     const current_password = req.body.current_password || req.body.currentPassword;
     const new_password = req.body.new_password || req.body.newPassword;
@@ -406,15 +412,30 @@ router.post('/me/change-password', requireAuth, passwordRateLimiter, (req: AuthR
       return res.status(400).json({ error: 'New password must be between 6 and 128 characters' });
     }
 
-    const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as any;
-    if (!user || !verifyPassword(current_password, user.password_hash).valid) {
+    let userPwHash: string | undefined;
+    if (config.useD1AuthBridge) {
+      const bridgeUser = await d1BridgeClient.getUserForLogin(req.user!.email);
+      userPwHash = bridgeUser.user?.password_hash;
+    } else {
+      const user = await adapter.queryOne<any>('SELECT password_hash FROM users WHERE id = ?', [userId]);
+      userPwHash = user?.password_hash;
+    }
+
+    if (!userPwHash || !verifyPassword(current_password, userPwHash).valid) {
       return res.status(400).json({ error: 'Incorrect current password' });
     }
 
-    db.prepare('UPDATE users SET password_hash = ?, updated_at = datetime(\'now\') WHERE id = ?')
-      .run(hashPassword(new_password), userId);
+    const newHash = hashPassword(new_password);
+    if (config.useD1AuthBridge) {
+      const updateRes = await d1BridgeClient.changePassword(userId, newHash);
+      if (!updateRes.success) {
+        return sendSafeServerError(res, new Error(updateRes.error), 'Failed to change password');
+      }
+    } else {
+      await adapter.execute('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newHash, userId]);
+    }
 
-    logActivity(userId, 'password_changed', 'Security Update', 'Account password was changed successfully.');
+    await logActivity(userId, 'password_changed', 'Security Update', 'Account password was changed successfully.');
 
     return res.json({ success: true, message: 'Password updated successfully' });
   } catch (err: any) {
@@ -423,40 +444,42 @@ router.post('/me/change-password', requireAuth, passwordRateLimiter, (req: AuthR
 });
 
 // GET /api/users/me/passport (Dedicated STROOM Passport)
-router.get('/me/passport', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/me/passport', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
 
-    const user = db.prepare(`
+    const user = await adapter.queryOne<any>(`
       SELECT id, full_name, display_name, avatar_url, member_id, city, role, created_at, is_public
       FROM users WHERE id = ?
-    `).get(userId) as any;
+    `, [userId]);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Verified Passport Stamps
-    const stamps = db.prepare(`
+    const stamps = await adapter.query<any>(`
       SELECT id, event_id, event_title, category, city_name, venue_name, stamp_icon, verified_at
       FROM passport_stamps
       WHERE user_id = ?
       ORDER BY verified_at DESC
-    `).all(userId);
+    `, [userId]);
 
     // All available master achievements with unlocked status
-    const masterAchievements = db.prepare(`
+    const masterAchievements = await adapter.query<any>(`
       SELECT m.*, u.unlocked_at, CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END as is_unlocked
       FROM achievements_master m
       LEFT JOIN user_achievements u ON m.badge_key = u.badge_key AND u.user_id = ?
       WHERE m.is_active = 1
       ORDER BY is_unlocked DESC, m.points DESC
-    `).all(userId);
+    `, [userId]);
 
     // Distinct metrics
     const categoriesSet = new Set(stamps.map((s: any) => s.category));
     const citiesSet = new Set(stamps.map((s: any) => s.city_name));
-    const communitiesCount = (db.prepare('SELECT COUNT(*) as c FROM community_members WHERE user_id = ?').get(userId) as any)?.c || 0;
+    const commRow = await adapter.queryOne<any>('SELECT COUNT(*) as c FROM community_members WHERE user_id = ?', [userId]);
+    const communitiesCount = commRow?.c || 0;
 
     const totalPoints = masterAchievements
       .filter((a: any) => a.is_unlocked === 1)
@@ -491,18 +514,20 @@ router.get('/me/passport', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/users/me/notifications (In-App Notification Center)
-router.get('/me/notifications', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/me/notifications', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
-    const notifications = db.prepare(`
+    const notifications = await adapter.query<any>(`
       SELECT id, type, title, message, data_json, is_read, created_at
       FROM notifications
       WHERE user_id = ?
       ORDER BY created_at DESC
       LIMIT 40
-    `).all(userId);
+    `, [userId]);
 
-    const unreadCount = (db.prepare('SELECT COUNT(*) as c FROM notifications WHERE user_id = ? AND is_read = 0').get(userId) as any)?.c || 0;
+    const unreadRow = await adapter.queryOne<any>('SELECT COUNT(*) as c FROM notifications WHERE user_id = ? AND is_read = 0', [userId]);
+    const unreadCount = unreadRow?.c || 0;
 
     return res.json({ success: true, notifications, unreadCount });
   } catch (err: any) {
@@ -511,12 +536,13 @@ router.get('/me/notifications', requireAuth, (req: AuthRequest, res: Response) =
 });
 
 // PATCH /api/users/me/notifications/:id/read
-router.patch('/me/notifications/:id/read', requireAuth, (req: AuthRequest, res: Response) => {
+router.patch('/me/notifications/:id/read', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
     const { id } = req.params;
 
-    db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?').run(id, userId);
+    await adapter.execute('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?', [id, userId]);
     return res.json({ success: true, message: 'Notification marked as read' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -524,10 +550,11 @@ router.patch('/me/notifications/:id/read', requireAuth, (req: AuthRequest, res: 
 });
 
 // POST /api/users/me/notifications/mark-all-read
-router.post('/me/notifications/mark-all-read', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/me/notifications/mark-all-read', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const userId = req.user!.id;
-    db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?').run(userId);
+    await adapter.execute('UPDATE notifications SET is_read = 1 WHERE user_id = ?', [userId]);
     return res.json({ success: true, message: 'All notifications marked as read' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -535,17 +562,18 @@ router.post('/me/notifications/mark-all-read', requireAuth, (req: AuthRequest, r
 });
 
 // GET /api/users/public/:memberIdOrId (Public Member Profile with Privacy Controls)
-router.get('/public/:memberIdOrId', (req, res) => {
+router.get('/public/:memberIdOrId', async (req, res) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { memberIdOrId } = req.params;
 
-    const user = db.prepare(`
-      SELECT 
+    const user = await adapter.queryOne<any>(`
+      SELECT
         id, full_name, display_name, avatar_url, cover_url, member_id, city, bio,
         interests_json, is_public, privacy_settings_json, created_at
       FROM users
       WHERE member_id = ? OR id = ?
-    `).get(memberIdOrId, memberIdOrId) as any;
+    `, [memberIdOrId, memberIdOrId]);
 
     if (!user) {
       return res.status(404).json({ error: 'Member not found' });
@@ -571,21 +599,21 @@ router.get('/public/:memberIdOrId', (req, res) => {
     } catch {}
 
     const publicStamps = privacy.showStamps
-      ? db.prepare('SELECT id, event_title, category, city_name, venue_name, stamp_icon, verified_at FROM passport_stamps WHERE user_id = ? ORDER BY verified_at DESC').all(user.id)
+      ? await adapter.query<any>('SELECT id, event_title, category, city_name, venue_name, stamp_icon, verified_at FROM passport_stamps WHERE user_id = ? ORDER BY verified_at DESC', [user.id])
       : [];
 
     const publicAchievements = privacy.showAchievements
-      ? db.prepare('SELECT id, badge_key, title, description, icon_name, category, unlocked_at FROM user_achievements WHERE user_id = ? ORDER BY unlocked_at DESC').all(user.id)
+      ? await adapter.query<any>('SELECT id, badge_key, title, description, icon_name, category, unlocked_at FROM user_achievements WHERE user_id = ? ORDER BY unlocked_at DESC', [user.id])
       : [];
 
     const publicCommunities = privacy.showCommunities
-      ? db.prepare(`
+      ? await adapter.query<any>(`
           SELECT c.id, c.name, c.category, c.image_url, ci.name as city_name, cm.joined_at
           FROM community_members cm
           JOIN communities c ON cm.community_id = c.id
           JOIN cities ci ON c.city_id = ci.id
           WHERE cm.user_id = ?
-        `).all(user.id)
+        `, [user.id])
       : [];
 
     return res.json({
@@ -610,15 +638,16 @@ router.get('/public/:memberIdOrId', (req, res) => {
 });
 
 // GET /api/users/admin/members (Admin Member Directory)
-router.get('/admin/members', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/admin/members', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     if (!['admin', 'super_admin', 'event_manager'].includes(req.user!.role)) {
       return res.status(403).json({ error: 'Access denied: Administrator privileges required.' });
     }
 
     const { search, city, role } = req.query;
     let query = `
-      SELECT 
+      SELECT
         u.id, u.email, u.full_name, u.display_name, u.role, u.member_id, u.city, u.phone, u.onboarding_status, u.created_at,
         (SELECT COUNT(*) FROM event_registrations WHERE user_id = u.id) as registrations_count,
         (SELECT COUNT(*) FROM passport_stamps WHERE user_id = u.id) as attended_count,
@@ -645,7 +674,7 @@ router.get('/admin/members', requireAuth, (req: AuthRequest, res: Response) => {
 
     query += ` ORDER BY u.created_at DESC`;
 
-    const members = db.prepare(query).all(...params);
+    const members = await adapter.query<any>(query, params);
     return res.json({ members });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -653,23 +682,24 @@ router.get('/admin/members', requireAuth, (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/users/admin/members/:id/details (Admin single member inspection)
-router.get('/admin/members/:id/details', requireAuth, (req: AuthRequest, res: Response) => {
+router.get('/admin/members/:id/details', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     if (!['admin', 'super_admin', 'event_manager'].includes(req.user!.role)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
     const { id } = req.params;
-    const member = db.prepare(`
+    const member = await adapter.queryOne<any>(`
       SELECT id, email, full_name, display_name, role, member_id, city, phone, bio, avatar_url, onboarding_status, created_at
       FROM users WHERE id = ?
-    `).get(id);
+    `, [id]);
 
     if (!member) {
       return res.status(404).json({ error: 'Member not found' });
     }
 
-    const registrations = db.prepare(`
+    const registrations = await adapter.query<any>(`
       SELECT r.*, e.title as event_title, e.category, e.event_date, c.name as city_name, v.name as venue_name
       FROM event_registrations r
       JOIN events e ON r.event_id = e.id
@@ -677,11 +707,11 @@ router.get('/admin/members/:id/details', requireAuth, (req: AuthRequest, res: Re
       JOIN venues v ON e.venue_id = v.id
       WHERE r.user_id = ?
       ORDER BY r.created_at DESC
-    `).all(id);
+    `, [id]);
 
-    const stamps = db.prepare('SELECT * FROM passport_stamps WHERE user_id = ? ORDER BY verified_at DESC').all(id);
-    const achievements = db.prepare('SELECT * FROM user_achievements WHERE user_id = ? ORDER BY unlocked_at DESC').all(id);
-    const activity = db.prepare('SELECT * FROM activity_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 20').all(id);
+    const stamps = await adapter.query<any>('SELECT * FROM passport_stamps WHERE user_id = ? ORDER BY verified_at DESC', [id]);
+    const achievements = await adapter.query<any>('SELECT * FROM user_achievements WHERE user_id = ? ORDER BY unlocked_at DESC', [id]);
+    const activity = await adapter.query<any>('SELECT * FROM activity_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 20', [id]);
 
     return res.json({
       success: true,
@@ -697,8 +727,9 @@ router.get('/admin/members/:id/details', requireAuth, (req: AuthRequest, res: Re
 });
 
 // POST /api/users/admin/members/:id/award-achievement (Admin manually award badge)
-router.post('/admin/members/:id/award-achievement', requireAuth, (req: AuthRequest, res: Response) => {
+router.post('/admin/members/:id/award-achievement', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     if (!['admin', 'super_admin'].includes(req.user!.role)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
@@ -706,18 +737,24 @@ router.post('/admin/members/:id/award-achievement', requireAuth, (req: AuthReque
     const { id } = req.params;
     const { badge_key } = req.body;
 
-    const master = db.prepare('SELECT * FROM achievements_master WHERE badge_key = ?').get(badge_key) as any;
+    const master = await adapter.queryOne<any>('SELECT * FROM achievements_master WHERE badge_key = ?', [badge_key]);
     if (!master) {
       return res.status(404).json({ error: 'Achievement badge not found in master catalog' });
     }
 
     const achId = 'uach_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-    db.prepare(`
-      INSERT OR REPLACE INTO user_achievements (id, user_id, badge_key, title, description, icon_name, category, unlocked_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `).run(achId, id, master.badge_key, master.title, master.description, master.icon_name, master.category);
+    await adapter.execute(`
+      INSERT INTO user_achievements (id, user_id, badge_key, title, description, icon_name, category, unlocked_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id, badge_key) DO UPDATE SET
+        title = excluded.title,
+        description = excluded.description,
+        icon_name = excluded.icon_name,
+        category = excluded.category,
+        unlocked_at = excluded.unlocked_at
+    `, [achId, id, master.badge_key, master.title, master.description, master.icon_name, master.category]);
 
-    createNotification(
+    await createNotification(
       id,
       'achievement',
       `Official Badge Awarded: ${master.title}`,
@@ -725,7 +762,7 @@ router.post('/admin/members/:id/award-achievement', requireAuth, (req: AuthReque
       { badgeKey: master.badge_key }
     );
 
-    logActivity(id, 'achievement_unlocked', `Badge Awarded: ${master.title}`, 'Granted by community administrator.', master.badge_key);
+    await logActivity(id, 'achievement_unlocked', `Badge Awarded: ${master.title}`, 'Granted by community administrator.', master.badge_key);
 
     return res.json({ success: true, message: `Awarded ${master.title} to member.` });
   } catch (err: any) {
@@ -734,8 +771,9 @@ router.post('/admin/members/:id/award-achievement', requireAuth, (req: AuthReque
 });
 
 // PUT /api/users/admin/members/:id/role (Super Admin updates member role)
-router.put('/admin/members/:id/role', requireAuth, requirePermission('roles.assign'), (req: AuthRequest, res: Response) => {
+router.put('/admin/members/:id/role', requireAuth, requirePermission('roles.assign'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const { role } = req.body;
 
@@ -744,14 +782,14 @@ router.put('/admin/members/:id/role', requireAuth, requirePermission('roles.assi
       return res.status(400).json({ error: 'Invalid user role' });
     }
 
-    const target = db.prepare('SELECT id, role FROM users WHERE id = ?').get(id) as any;
+    const target = await adapter.queryOne<any>('SELECT id, role FROM users WHERE id = ?', [id]);
     if (!target) return res.status(404).json({ error: 'Member not found' });
 
     if ((PRIVILEGED_ROLES.includes(role) || PRIVILEGED_ROLES.includes(target.role)) && req.user!.role !== 'super_admin') {
       return res.status(403).json({ error: 'Forbidden: Only Super Administrators can assign or modify privileged Admin roles.' });
     }
 
-    db.prepare('UPDATE users SET role = ?, updated_at = datetime(\'now\') WHERE id = ?').run(role, id);
+    await adapter.execute('UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [role, id]);
     return res.json({ message: `User role updated to ${role}`, memberId: id, newRole: role });
   } catch (err: any) {
     return sendSafeServerError(res, err, 'Failed to update role');

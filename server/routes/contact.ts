@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { optionalAuth, AuthRequest } from '../middleware/auth';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { config } from '../config/env';
@@ -14,8 +14,9 @@ const contactLimiter = createRateLimiter({
 });
 
 // 1. POST Submit Public Contact Inquiry
-router.post('/', contactLimiter, optionalAuth, (req: AuthRequest, res: Response) => {
+router.post('/', contactLimiter, optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { name, email, subject, message } = req.body;
 
     if (!name || !email || !message) {
@@ -34,17 +35,17 @@ router.post('/', contactLimiter, optionalAuth, (req: AuthRequest, res: Response)
     const inquiryId = 'inq_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
     const userId = req.user?.id || null;
 
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO contact_inquiries (id, name, email, subject, message, user_id, status)
       VALUES (?, ?, ?, ?, ?, ?, 'new')
-    `).run(
+    `, [
       inquiryId,
       name.trim(),
       email.trim().toLowerCase(),
       (subject || 'General Inquiry').trim(),
       message.trim(),
       userId
-    );
+    ]);
 
     return res.status(201).json({
       success: true,

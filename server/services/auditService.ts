@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 
 const SENSITIVE_KEYS = new Set([
   'password',
@@ -44,20 +44,21 @@ export interface AuditLogInput {
   throwOnError?: boolean;
 }
 
-export function recordAuditLog(input: AuditLogInput): string | null {
+export async function recordAuditLog(input: AuditLogInput): Promise<string | null> {
   try {
     const id = 'aud_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
     const detailsPayload = input.details ? sanitizeForAudit(input.details) : null;
     const beforePayload = input.beforeData !== undefined ? sanitizeForAudit(input.beforeData) : null;
     const afterPayload = input.afterData !== undefined ? sanitizeForAudit(input.afterData) : null;
 
-    db.prepare(`
+    const adapter = getDatabaseAdapter();
+    await adapter.execute(`
       INSERT INTO audit_logs (
         id, user_id, actor_name, actor_role, action, entity_type, entity_id,
         details_json, before_json, after_json, result, source, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `).run(
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, [
       id,
       input.actorId || null,
       input.actorName || 'System',
@@ -70,7 +71,7 @@ export function recordAuditLog(input: AuditLogInput): string | null {
       afterPayload ? JSON.stringify(afterPayload) : null,
       input.result || 'success',
       input.source || 'admin_api'
-    );
+    ]);
     return id;
   } catch (err) {
     console.warn('[auditService.recordAuditLog]', err);

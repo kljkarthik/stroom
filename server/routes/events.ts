@@ -1,22 +1,23 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { db } from '../db/database';
+import { getDatabaseAdapter } from '../db/adapter';
 import { requireAuth, requirePermission, AuthRequest, optionalAuth } from '../middleware/auth';
 import { Event, City, EventRegistration } from '../types';
 
 const router = Router();
 
 // 1. GET all launch cities
-router.get('/cities', (req, res) => {
+router.get('/cities', async (req, res) => {
   try {
-    const cities = db.prepare(`
-      SELECT 
+    const adapter = getDatabaseAdapter();
+    const cities = await adapter.query<City>(`
+      SELECT
         c.*,
         (SELECT COUNT(*) FROM events WHERE city_id = c.id AND status IN ('published', 'live')) as active_events_count
       FROM cities c
       WHERE c.is_active = 1
       ORDER BY c.launch_order ASC
-    `).all() as City[];
+    `);
 
     return res.json({ cities });
   } catch (err: any) {
@@ -25,12 +26,13 @@ router.get('/cities', (req, res) => {
 });
 
 // 2. GET events with city, category, search, and price filters
-router.get('/', optionalAuth, (req: AuthRequest, res: Response) => {
+router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { city_id, category, status, search, price_filter, timeframe } = req.query;
 
     let query = `
-      SELECT 
+      SELECT
         e.*,
         c.name as city_name,
         c.state as state_name,
@@ -80,7 +82,7 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response) => {
 
     query += ` ORDER BY e.is_flagship DESC, e.event_date ASC`;
 
-    const events = db.prepare(query).all(...params) as (Event & { seats_left: number })[];
+    const events = await adapter.query<Event & { seats_left: number }>(query, params);
 
     return res.json({ events });
   } catch (err: any) {
@@ -89,12 +91,13 @@ router.get('/', optionalAuth, (req: AuthRequest, res: Response) => {
 });
 
 // 3. GET single event detail
-router.get('/:id', optionalAuth, (req: AuthRequest, res: Response) => {
+router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
 
-    const event = db.prepare(`
-      SELECT 
+    const event = await adapter.queryOne<Event & { seats_left: number }>(`
+      SELECT
         e.*,
         c.name as city_name,
         c.state as state_name,
@@ -108,7 +111,7 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res: Response) => {
       JOIN cities c ON e.city_id = c.id
       JOIN venues v ON e.venue_id = v.id
       WHERE e.id = ?
-    `).get(id) as (Event & { seats_left: number }) | undefined;
+    `, [id]);
 
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
@@ -117,9 +120,10 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res: Response) => {
     // Check if current user is registered
     let userRegistration: EventRegistration | null = null;
     if (req.user) {
-      userRegistration = (db.prepare(`
+      const reg = await adapter.queryOne<EventRegistration>(`
         SELECT * FROM event_registrations WHERE event_id = ? AND user_id = ?
-      `).get(id, req.user.id) as EventRegistration) || null;
+      `, [id, req.user.id]);
+      userRegistration = reg || null;
     }
 
     return res.json({ event, userRegistration });
@@ -129,8 +133,9 @@ router.get('/:id', optionalAuth, (req: AuthRequest, res: Response) => {
 });
 
 // 4. POST Register for Event (Generates Authentic Digital Pass & Seat Code)
-router.post('/:id/register', optionalAuth, (req: AuthRequest, res: Response) => {
+router.post('/:id/register', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { id } = req.params;
     const { role_type, seat_tier, attendee_name, email, phone, role } = req.body;
     let userId = req.user?.id;
@@ -138,23 +143,23 @@ router.post('/:id/register', optionalAuth, (req: AuthRequest, res: Response) => 
     if (!userId) {
       // Find or create user for this attendee
       const attendeeEmail = email || `attendee_${Date.now()}@stroom.club`;
-      let existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(attendeeEmail) as { id: string } | undefined;
+      const existingUser = await adapter.queryOne<{ id: string }>('SELECT id FROM users WHERE email = ?', [attendeeEmail]);
       if (!existingUser) {
         const newId = 'usr_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
         const memberId = `STR-HYD-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-        db.prepare(`
+        await adapter.execute(`
           INSERT INTO users (id, email, password_hash, full_name, phone, role, member_id, onboarding_status)
           VALUES (?, ?, '', ?, ?, 'user', ?, 'NOT_STARTED')
-        `).run(newId, attendeeEmail, attendee_name || 'STROOM Attendee', phone || '', memberId);
+        `, [newId, attendeeEmail, attendee_name || 'STROOM Attendee', phone || '', memberId]);
         userId = newId;
       } else {
         userId = existingUser.id;
       }
     }
 
-    const registrationTx = db.transaction(() => {
+    const result = await adapter.transaction(async (tx) => {
       // 1. Lock and verify event
-      const event = db.prepare('SELECT * FROM events WHERE id = ?').get(id) as Event | undefined;
+      const event = await tx.queryOne<Event>('SELECT * FROM events WHERE id = ?', [id]);
       if (!event) {
         throw new Error('Event not found');
       }
@@ -164,7 +169,7 @@ router.post('/:id/register', optionalAuth, (req: AuthRequest, res: Response) => 
       }
 
       // 2. Check if already registered
-      const existing = db.prepare('SELECT * FROM event_registrations WHERE event_id = ? AND user_id = ?').get(id, userId) as EventRegistration | undefined;
+      const existing = await tx.queryOne<EventRegistration>('SELECT * FROM event_registrations WHERE event_id = ? AND user_id = ?', [id, userId]);
       if (existing) {
         return { existing: true, pass: existing };
       }
@@ -178,16 +183,16 @@ router.post('/:id/register', optionalAuth, (req: AuthRequest, res: Response) => 
       const regId = 'reg_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 
       // 4. Insert registration
-      db.prepare(`
+      await tx.execute(`
         INSERT INTO event_registrations (id, event_id, user_id, pass_code, qr_token, seat_tier, role_type, checkin_status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed')
-      `).run(regId, id, userId, passCode, qrToken, seat_tier || 'Table Seat', role || role_type || 'Bidder');
+      `, [regId, id, userId, passCode, qrToken, seat_tier || 'Table Seat', role || role_type || 'Bidder']);
 
       // 5. Increment event booked seats
-      db.prepare('UPDATE events SET seats_booked = seats_booked + 1 WHERE id = ?').run(id);
+      await tx.execute('UPDATE events SET seats_booked = seats_booked + 1 WHERE id = ?', [id]);
 
-      const pass = db.prepare(`
-        SELECT 
+      const pass = await tx.queryOne<EventRegistration>(`
+        SELECT
           r.*,
           e.title as event_title,
           e.event_date,
@@ -200,12 +205,11 @@ router.post('/:id/register', optionalAuth, (req: AuthRequest, res: Response) => 
         JOIN cities c ON e.city_id = c.id
         JOIN venues v ON e.venue_id = v.id
         WHERE r.id = ?
-      `).get(regId) as EventRegistration;
+      `, [regId]);
 
       return { existing: false, pass };
     });
 
-    const result = registrationTx();
     return res.status(200).json({
       success: true,
       ...result,
@@ -218,8 +222,9 @@ router.post('/:id/register', optionalAuth, (req: AuthRequest, res: Response) => 
 });
 
 // 5. POST Create New Event (Admin / Event Manager)
-router.post('/', requireAuth, requirePermission('events.create'), (req: AuthRequest, res: Response) => {
+router.post('/', requireAuth, requirePermission('events.create'), async (req: AuthRequest, res: Response) => {
   try {
+    const adapter = getDatabaseAdapter();
     const { city_id, venue_id, title, category, event_date, event_time, description, seats_total, entry_fee, is_flagship, image_url } = req.body;
 
     if (!city_id || !venue_id || !title || !category || !event_date || !event_time) {
@@ -228,10 +233,10 @@ router.post('/', requireAuth, requirePermission('events.create'), (req: AuthRequ
 
     const eventId = 'evt_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 
-    db.prepare(`
+    await adapter.execute(`
       INSERT INTO events (id, city_id, venue_id, title, category, event_date, event_time, description, seats_total, entry_fee, is_flagship, image_url, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       eventId,
       city_id,
       venue_id,
@@ -245,9 +250,9 @@ router.post('/', requireAuth, requirePermission('events.create'), (req: AuthRequ
       is_flagship ? 1 : 0,
       image_url || 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800',
       req.user!.id
-    );
+    ]);
 
-    const createdEvent = db.prepare('SELECT * FROM events WHERE id = ?').get(eventId);
+    const createdEvent = await adapter.queryOne('SELECT * FROM events WHERE id = ?', [eventId]);
     return res.status(201).json({ message: 'Event created successfully', event: createdEvent });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

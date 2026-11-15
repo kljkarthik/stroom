@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: stroom-backend
+    runtime: node
+    plan: free
+    region: ohio # AWS us-east-2 (co-located with Neon US East for minimal database latency)
+    buildCommand: npm install --include=dev && npm run build:server
+    startCommand: node dist/server/index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_DRIVER
+        value: postgres
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: ENABLE_D1_AUTH_BRIDGE
+        value: "false"
