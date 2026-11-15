@@ -9,14 +9,14 @@ exports.requireAdmin = requireAdmin;
 exports.requirePermission = requirePermission;
 exports.optionalAuth = optionalAuth;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const database_1 = require("../db/database");
+const adapter_1 = require("../db/adapter");
 const rbacService_1 = require("../services/rbacService");
 const env_1 = require("../config/env");
 const JWT_SECRET = env_1.config.jwtSecret;
 function generateToken(user) {
     return jsonwebtoken_1.default.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 }
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Authentication required. Please provide a valid Bearer token.' });
@@ -24,7 +24,8 @@ function requireAuth(req, res, next) {
     const token = authHeader.split(' ')[1];
     try {
         const payload = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        const user = database_1.db.prepare('SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?').get(payload.id);
+        const adapter = (0, adapter_1.getDatabaseAdapter)();
+        const user = await adapter.queryOne('SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?', [payload.id]);
         if (!user) {
             return res.status(401).json({ error: 'User not found or session expired.' });
         }
@@ -58,13 +59,14 @@ function requirePermission(permission) {
         next();
     };
 }
-function optionalAuth(req, res, next) {
+async function optionalAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1];
         try {
             const payload = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-            const user = database_1.db.prepare('SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?').get(payload.id);
+            const adapter = (0, adapter_1.getDatabaseAdapter)();
+            const user = await adapter.queryOne('SELECT id, email, full_name, avatar_url, role, account_status, onboarding_status, created_at, updated_at FROM users WHERE id = ?', [payload.id]);
             if (user && user.account_status !== 'suspended') {
                 req.user = user;
             }

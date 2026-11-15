@@ -15,6 +15,7 @@ import {
   User,
   DollarSign
 } from 'lucide-react';
+import ImageUpload from '../common/ImageUpload';
 
 interface AuctionTeamManagerProps {
   auctionId: string;
@@ -41,6 +42,7 @@ export const AuctionTeamManager: React.FC<AuctionTeamManagerProps> = ({
     captain_name: '',
     owner_name: '',
     owner_email: '',
+    logo_url: '',
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,6 +60,7 @@ export const AuctionTeamManager: React.FC<AuctionTeamManagerProps> = ({
       captain_name: '',
       owner_name: '',
       owner_email: '',
+      logo_url: '',
     });
     setIsCreating(true);
     setError(null);
@@ -74,6 +77,7 @@ export const AuctionTeamManager: React.FC<AuctionTeamManagerProps> = ({
       captain_name: team.captain_name || '',
       owner_name: team.owner_name || '',
       owner_email: team.owner_email || '',
+      logo_url: team.logo_url || '',
     });
     setError(null);
   };
@@ -251,6 +255,16 @@ export const AuctionTeamManager: React.FC<AuctionTeamManagerProps> = ({
               </div>
             </div>
 
+            <ImageUpload
+              label="Franchise Team Logo"
+              value={formTeam.logo_url}
+              onChange={(url) => setFormTeam({ ...formTeam, logo_url: url })}
+              folder="auctions/teams"
+              aspectRatio="square"
+              maxSizeMB={5}
+              helperText="Upload official team logo or crest (max 5MB)."
+            />
+
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -285,12 +299,20 @@ export const AuctionTeamManager: React.FC<AuctionTeamManagerProps> = ({
                 className="p-4 rounded-2xl bg-stroom-surfaceDark border border-stroom-borderDark flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-white/20 transition-all"
               >
                 <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs text-white shadow-md flex-shrink-0"
-                    style={{ backgroundColor: t.color }}
-                  >
-                    {t.name.slice(0, 2).toUpperCase()}
-                  </div>
+                  {t.logo_url ? (
+                    <img
+                      src={t.logo_url}
+                      alt={t.name}
+                      className="w-10 h-10 rounded-2xl object-cover border border-white/20 flex-shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs text-white shadow-md flex-shrink-0"
+                      style={{ backgroundColor: t.color }}
+                    >
+                      {t.name.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-black text-white">{t.name}</h4>

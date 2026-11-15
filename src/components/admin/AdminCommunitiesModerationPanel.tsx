@@ -16,6 +16,7 @@ import {
   MessageSquareWarning,
   Ban,
 } from 'lucide-react';
+import ImageUpload from '../common/ImageUpload';
 
 interface AdminCommunitiesModerationPanelProps {
   mode: 'communities' | 'moderation';
@@ -44,6 +45,8 @@ export const AdminCommunitiesModerationPanel: React.FC<AdminCommunitiesModeratio
     description: '',
     guidelines: '',
     status: 'published',
+    image_url: '',
+    organizer_avatar: '',
   });
 
   // Community members modal
@@ -112,6 +115,8 @@ export const AdminCommunitiesModerationPanel: React.FC<AdminCommunitiesModeratio
       description: '',
       guidelines: 'Respect all members and foster authentic real-world conversations.',
       status: 'published',
+      image_url: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800',
+      organizer_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
     });
     setIsFormOpen(true);
   };
@@ -127,6 +132,8 @@ export const AdminCommunitiesModerationPanel: React.FC<AdminCommunitiesModeratio
       description: c.description || '',
       guidelines: c.guidelines || '',
       status: c.status || 'published',
+      image_url: c.image_url || '',
+      organizer_avatar: c.organizer_avatar || '',
     });
     setIsFormOpen(true);
   };
@@ -579,6 +586,28 @@ export const AdminCommunitiesModerationPanel: React.FC<AdminCommunitiesModeratio
                   className="w-full px-3 py-2 rounded-xl border border-stroom-borderLight bg-stroom-ivory font-semibold outline-none"
                 />
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <ImageUpload
+                  label="Community Cover Image"
+                  value={form.image_url}
+                  onChange={(url) => setForm({ ...form, image_url: url })}
+                  folder="communities/covers"
+                  aspectRatio="video"
+                  maxSizeMB={8}
+                  helperText="Community header banner (max 8MB)."
+                />
+                <ImageUpload
+                  label="Organizer Avatar"
+                  value={form.organizer_avatar}
+                  onChange={(url) => setForm({ ...form, organizer_avatar: url })}
+                  folder="communities/organizers"
+                  aspectRatio="square"
+                  maxSizeMB={5}
+                  helperText="Organizer profile photo (max 5MB)."
+                />
+              </div>
+
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"

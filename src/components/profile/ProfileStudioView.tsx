@@ -23,6 +23,7 @@ import {
   Sliders,
   Check
 } from 'lucide-react';
+import ImageUpload from '../common/ImageUpload';
 
 interface ProfileStudioViewProps {
   onTriggerQuiz?: () => void;
@@ -301,8 +302,8 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
                   )}
                 </div>
 
-                <div className="flex-1 space-y-2">
-                  <span className="text-[10px] text-stroom-charcoal/70 block">Select a curated aesthetic avatar or paste a link:</span>
+                <div className="flex-1 space-y-3">
+                  <span className="text-[10px] text-stroom-charcoal/70 block">Select a curated aesthetic avatar or upload your own:</span>
                   <div className="flex flex-wrap gap-2">
                     {PRESET_AVATARS.map((url, idx) => (
                       <button
@@ -317,21 +318,24 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
                       </button>
                     ))}
                   </div>
-                  <input
-                    type="url"
-                    placeholder="Or paste custom image URL..."
+                  <ImageUpload
                     value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-xs font-mono"
+                    onChange={(url) => setAvatarUrl(url)}
+                    folder="avatars"
+                    aspectRatio="square"
+                    maxSizeMB={5}
+                    label="Upload Custom Avatar"
+                    helperText="Upload a JPG, PNG or WebP profile photo (max 5MB)."
+                    className="pt-1"
                   />
                 </div>
               </div>
             </div>
 
             {/* Cover Image Picker */}
-            <div className="pt-3 border-t border-stroom-borderLight">
-              <span className="text-xs font-bold text-stroom-charcoal block mb-2">Profile Banner Cover</span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+            <div className="pt-3 border-t border-stroom-borderLight space-y-3">
+              <span className="text-xs font-bold text-stroom-charcoal block">Profile Banner Cover</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {PRESET_COVERS.map((url, idx) => (
                   <button
                     key={idx}
@@ -345,12 +349,14 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
                   </button>
                 ))}
               </div>
-              <input
-                type="url"
-                placeholder="Or paste custom banner cover URL..."
+              <ImageUpload
                 value={coverUrl}
-                onChange={(e) => setCoverUrl(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-xs font-mono"
+                onChange={(url) => setCoverUrl(url)}
+                folder="banners"
+                aspectRatio="banner"
+                maxSizeMB={8}
+                label="Upload Custom Banner"
+                helperText="Upload a high-resolution banner image (max 8MB)."
               />
             </div>
           </div>

@@ -17,6 +17,7 @@ import {
   FileText,
   Upload
 } from 'lucide-react';
+import ImageUpload from '../common/ImageUpload';
 
 interface AuctionPlayerManagerProps {
   auctionId: string;
@@ -296,13 +297,15 @@ export const AuctionPlayerManager: React.FC<AuctionPlayerManagerProps> = ({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-stone-300 uppercase mb-1">Photo URL</label>
-                <input
-                  type="text"
+              <div className="md:col-span-2">
+                <ImageUpload
+                  label="Player Photo"
                   value={formPlayer.photo_url}
-                  onChange={(e) => setFormPlayer({ ...formPlayer, photo_url: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl bg-black/40 border border-white/10 text-xs font-bold text-white focus:outline-none focus:border-stroom-orange"
+                  onChange={(url) => setFormPlayer({ ...formPlayer, photo_url: url })}
+                  folder="auctions/players"
+                  aspectRatio="square"
+                  maxSizeMB={5}
+                  helperText="Upload a square photo of the player (max 5MB)."
                 />
               </div>
             </div>

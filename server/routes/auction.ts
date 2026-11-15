@@ -960,7 +960,7 @@ router.post('/:id/teams', requireAuth, async (req: AuthRequest, res: Response) =
   try {
     const adapter = getDatabaseAdapter();
     const { id } = req.params;
-    const { name, city, color, purse_initial, captain_name, owner_name, owner_email } = req.body;
+    const { name, city, color, purse_initial, captain_name, owner_name, owner_email, logo_url } = req.body;
 
     if (!name || !color) {
       return res.status(400).json({ error: 'Team name and color are required' });
@@ -970,9 +970,9 @@ router.post('/:id/teams', requireAuth, async (req: AuthRequest, res: Response) =
     const purse = purse_initial || 10000000;
 
     await adapter.execute(`
-      INSERT INTO auction_teams (id, auction_id, name, city, color, purse_initial, purse_remaining, squad_count, captain_name, owner_name, owner_email)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
-    `, [teamId, id, name, city || 'Hyderabad', color, purse, purse, captain_name || null, owner_name || null, owner_email || null]);
+      INSERT INTO auction_teams (id, auction_id, name, city, color, purse_initial, purse_remaining, squad_count, captain_name, owner_name, owner_email, logo_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+    `, [teamId, id, name, city || 'Hyderabad', color, purse, purse, captain_name || null, owner_name || null, owner_email || null, logo_url || null]);
 
     const team = await adapter.queryOne('SELECT * FROM auction_teams WHERE id = ?', [teamId]);
     return res.status(201).json({ success: true, team });
@@ -985,7 +985,7 @@ router.put('/:id/teams/:teamId', requireAuth, async (req: AuthRequest, res: Resp
   try {
     const adapter = getDatabaseAdapter();
     const { id, teamId } = req.params;
-    const { name, city, color, captain_name, owner_name, owner_email } = req.body;
+    const { name, city, color, captain_name, owner_name, owner_email, logo_url } = req.body;
 
     await adapter.execute(`
       UPDATE auction_teams
@@ -994,9 +994,10 @@ router.put('/:id/teams/:teamId', requireAuth, async (req: AuthRequest, res: Resp
           color = COALESCE(?, color),
           captain_name = COALESCE(?, captain_name),
           owner_name = COALESCE(?, owner_name),
-          owner_email = COALESCE(?, owner_email)
+          owner_email = COALESCE(?, owner_email),
+          logo_url = COALESCE(?, logo_url)
       WHERE id = ? AND auction_id = ?
-    `, [name, city, color, captain_name, owner_name, owner_email, teamId, id]);
+    `, [name, city, color, captain_name, owner_name, owner_email, logo_url, teamId, id]);
 
     const updated = await adapter.queryOne('SELECT * FROM auction_teams WHERE id = ?', [teamId]);
     return res.json({ success: true, team: updated });

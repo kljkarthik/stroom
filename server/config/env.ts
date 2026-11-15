@@ -27,6 +27,13 @@ export interface AppConfig {
   originProxySecretPrevious?: string;
   originProxySecretPreviousExpiresAt?: number;
   requireOriginProxyAuth: boolean;
+
+  // Cloudinary Storage Configuration
+  cloudinaryCloudName: string;
+  cloudinaryApiKey: string;
+  cloudinaryApiSecret: string;
+  cloudinaryUrl?: string;
+  isCloudinaryConfigured: boolean;
 }
 
 function parseOrigins(raw?: string): string[] {
@@ -94,6 +101,14 @@ export function loadConfig(): AppConfig {
     : undefined;
   const requireOriginProxyAuth = process.env.REQUIRE_ORIGIN_PROXY_AUTH === 'true';
 
+  const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim() || '';
+  const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY?.trim() || '';
+  const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET?.trim() || '';
+  const cloudinaryUrl = process.env.CLOUDINARY_URL?.trim();
+  const isCloudinaryConfigured = Boolean(
+    (cloudinaryCloudName && cloudinaryApiKey && cloudinaryApiSecret) || cloudinaryUrl
+  );
+
   return {
     nodeEnv,
     isProduction,
@@ -115,6 +130,12 @@ export function loadConfig(): AppConfig {
     originProxySecretPrevious,
     originProxySecretPreviousExpiresAt,
     requireOriginProxyAuth,
+
+    cloudinaryCloudName,
+    cloudinaryApiKey,
+    cloudinaryApiSecret,
+    cloudinaryUrl,
+    isCloudinaryConfigured,
   };
 }
 

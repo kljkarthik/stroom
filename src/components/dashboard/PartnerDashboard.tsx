@@ -37,6 +37,7 @@ import {
   Save,
   ArrowRight
 } from 'lucide-react';
+import ImageUpload from '../common/ImageUpload';
 
 type PartnerTab =
   | 'overview'
@@ -972,23 +973,37 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ onOpenAuth, 
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block font-bold uppercase text-stone-500 mb-1">Logo Image URL</label>
-                      <input
-                        type="text"
+                      <ImageUpload
+                        label="Business Logo"
                         value={profileForm.business_logo || ''}
-                        onChange={(e) => setProfileForm({ ...profileForm, business_logo: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight font-semibold"
+                        onChange={(url) => setProfileForm({ ...profileForm, business_logo: url })}
+                        folder="partners/logos"
+                        aspectRatio="square"
+                        maxSizeMB={5}
+                        helperText="Upload official brand logo (square, max 5MB)."
                       />
                     </div>
                     <div>
-                      <label className="block font-bold uppercase text-stone-500 mb-1">Facilities (comma separated)</label>
-                      <input
-                        type="text"
-                        value={profileForm.facilitiesText || ''}
-                        onChange={(e) => setProfileForm({ ...profileForm, facilitiesText: e.target.value })}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight font-semibold"
+                      <ImageUpload
+                        label="Venue Cover Banner"
+                        value={profileForm.cover_url || ''}
+                        onChange={(url) => setProfileForm({ ...profileForm, cover_url: url })}
+                        folder="partners/covers"
+                        aspectRatio="banner"
+                        maxSizeMB={8}
+                        helperText="Upload venue cover banner (max 8MB)."
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold uppercase text-stone-500 mb-1">Facilities (comma separated)</label>
+                    <input
+                      type="text"
+                      value={profileForm.facilitiesText || ''}
+                      onChange={(e) => setProfileForm({ ...profileForm, facilitiesText: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight font-semibold"
+                    />
                   </div>
 
                   <div className="pt-3 flex flex-wrap items-center gap-3">

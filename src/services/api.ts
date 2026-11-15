@@ -1217,4 +1217,58 @@ export const api = {
     if (params.actor) q.set('actor', params.actor);
     return request<{ success: boolean; logs: any[] }>(`/admin/audit-logs${q.toString() ? '?' + q.toString() : ''}`);
   },
+
+  // Media / Upload
+  async uploadImage(file: File, folder: string = 'general'): Promise<{
+    success: boolean;
+    url: string;
+    secure_url: string;
+    public_id: string;
+    width: number;
+    height: number;
+    format: string;
+    bytes: number;
+  }> {
+    const token = localStorage.getItem('stroom_token');
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('folder', folder);
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/upload/image`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+    } catch (err: any) {
+      if (err.name === 'TypeError' || err.message?.includes('fetch')) {
+        throw new ApiError('Backend server is temporarily unreachable.', 503);
+      }
+      throw new ApiError(err.message || 'Image upload request failed', 500);
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new ApiError(data.error || `Upload failed with status ${res.status}`, res.status, data);
+    }
+
+    return data;
+  },
+
+  async deleteUploadedImage(publicId: string) {
+    return request<{ success: boolean; message: string }>('/upload', {
+      method: 'DELETE',
+      body: JSON.stringify({ public_id: publicId }),
+    });
+  },
+
+  async getMyUploads() {
+    return request<{ uploads: any[] }>('/upload/my-uploads');
+  },
 };

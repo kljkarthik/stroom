@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Clock
 } from 'lucide-react';
+import ImageUpload from '../common/ImageUpload';
 
 interface AdminEventsCitiesPanelProps {
   permissions: string[];
@@ -859,6 +860,15 @@ export const AdminEventsCitiesPanel: React.FC<AdminEventsCitiesPanelProps> = ({ 
                 <label className="block font-bold uppercase text-stone-500 mb-1">Description</label>
                 <textarea rows={2} value={eventForm.description} onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })} className="w-full px-3 py-2 rounded-xl border border-stroom-borderLight" />
               </div>
+              <ImageUpload
+                label="Event Poster / Banner Image"
+                value={eventForm.image_url}
+                onChange={(url) => setEventForm({ ...eventForm, image_url: url })}
+                folder="events"
+                aspectRatio="video"
+                maxSizeMB={8}
+                helperText="Upload event promotional banner or poster (16:9 recommended, max 8MB)."
+              />
               <button type="submit" disabled={savingEvent} className="w-full py-2.5 rounded-xl bg-stroom-orange text-white font-black">
                 {savingEvent ? 'Saving...' : editingEvent ? 'Save Changes' : 'Create Event'}
               </button>
@@ -892,6 +902,15 @@ export const AdminEventsCitiesPanel: React.FC<AdminEventsCitiesPanelProps> = ({ 
                 <label className="block font-bold uppercase text-stone-500 mb-1">Description</label>
                 <textarea rows={2} value={cityForm.description} onChange={(e) => setCityForm({ ...cityForm, description: e.target.value })} className="w-full px-3 py-2 rounded-xl border border-stroom-borderLight" />
               </div>
+              <ImageUpload
+                label="City Cover / Skyline Image"
+                value={cityForm.image_url}
+                onChange={(url) => setCityForm({ ...cityForm, image_url: url })}
+                folder="cities"
+                aspectRatio="banner"
+                maxSizeMB={8}
+                helperText="Upload city skyline or featured photo (max 8MB)."
+              />
               <div className="flex items-center gap-4 pt-1">
                 <label className="flex items-center gap-1.5 font-bold">
                   <input type="checkbox" checked={cityForm.is_active} onChange={(e) => setCityForm({ ...cityForm, is_active: e.target.checked })} /> Active

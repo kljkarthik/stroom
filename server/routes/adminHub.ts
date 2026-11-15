@@ -1511,19 +1511,21 @@ router.put('/communities/:id', requirePermission('communities.manage'), async (r
     const existing = await adapter.queryOne('SELECT * FROM communities WHERE id = ?', [id]) as any;
     if (!existing) return res.status(404).json({ error: 'Community not found' });
 
-    const { name, city_id, category, description, organizer_name, meeting_schedule, guidelines, status } = req.body;
+    const { name, city_id, category, description, image_url, organizer_name, organizer_avatar, meeting_schedule, guidelines, status } = req.body;
     await adapter.execute(`
       UPDATE communities
       SET name = COALESCE(?, name),
           city_id = COALESCE(?, city_id),
           category = COALESCE(?, category),
           description = COALESCE(?, description),
+          image_url = COALESCE(?, image_url),
           organizer_name = COALESCE(?, organizer_name),
+          organizer_avatar = COALESCE(?, organizer_avatar),
           meeting_schedule = COALESCE(?, meeting_schedule),
           guidelines = COALESCE(?, guidelines),
           status = COALESCE(?, status)
       WHERE id = ?
-    `, [name, city_id, category, description, organizer_name, meeting_schedule, guidelines, status, id]);
+    `, [name, city_id, category, description, image_url, organizer_name, organizer_avatar, meeting_schedule, guidelines, status, id]);
 
     const updated = await adapter.queryOne('SELECT * FROM communities WHERE id = ?', [id]);
     await recordAuditLog({

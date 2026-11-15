@@ -603,14 +603,14 @@ function migratePhase4Tables() {
         }
         // Set default display_name and initial interests for demo users
         exports.db.prepare(`
-      UPDATE users 
+      UPDATE users
       SET display_name = COALESCE(display_name, full_name),
           first_name = COALESCE(first_name, substr(full_name, 1, instr(full_name || ' ', ' ') - 1)),
           last_name = COALESCE(last_name, substr(full_name, instr(full_name || ' ', ' ') + 1)),
-          interests_json = CASE 
-            WHEN interests_json IS NULL OR interests_json = '[]' 
-            THEN '["cricket","gaming","networking","social_meetups"]' 
-            ELSE interests_json 
+          interests_json = CASE
+            WHEN interests_json IS NULL OR interests_json = '[]'
+            THEN '["cricket","gaming","networking","social_meetups"]'
+            ELSE interests_json
           END
       WHERE email IN ('admin@stroom.app', 'user@stroom.app')
     `).run();
@@ -704,7 +704,7 @@ function migratePhase4Tables() {
         // 3. Migrate past checked-in registrations into passport_stamps
         exports.db.prepare(`
       INSERT OR IGNORE INTO passport_stamps (id, user_id, event_id, event_title, category, city_name, venue_name, stamp_icon, verified_at)
-      SELECT 
+      SELECT
         'stamp_' || substr(r.id, 5),
         r.user_id,
         r.event_id,
@@ -712,7 +712,7 @@ function migratePhase4Tables() {
         e.category,
         c.name,
         v.name,
-        CASE 
+        CASE
           WHEN e.category LIKE '%auction%' THEN 'Trophy'
           WHEN e.category LIKE '%sport%' THEN 'Activity'
           WHEN e.category LIKE '%cafe%' THEN 'Coffee'
@@ -732,7 +732,7 @@ function migratePhase4Tables() {
             if (actCount === 0) {
                 exports.db.prepare(`
           INSERT INTO activity_logs (id, user_id, activity_type, title, description, created_at)
-          VALUES 
+          VALUES
             ('act_001', ?, 'joined_stroom', 'Welcome to STROOM', 'Joined the Strangers Room community ecosystem as a verified member.', datetime('now', '-7 days')),
             ('act_002', ?, 'community_joined', 'Joined Hyderabad Cricket Enthusiasts', 'Connected with local cricket lovers in Jubilee Hills.', datetime('now', '-5 days')),
             ('act_003', ?, 'event_registered', 'Registered for STROOM Premier Cricket Auction', 'Entry pass STR-HYD-0428 generated with VIP table seat.', datetime('now', '-2 days'))
@@ -743,7 +743,7 @@ function migratePhase4Tables() {
             if (notifCount === 0) {
                 exports.db.prepare(`
           INSERT INTO notifications (id, user_id, type, title, message, created_at)
-          VALUES 
+          VALUES
             ('notif_001', ?, 'registration', 'Pass Confirmed: STROOM Cricket Auction', 'Your digital entry pass is confirmed for Saturday, 6:00 PM at Third Wave Coffee.', datetime('now', '-2 days')),
             ('notif_002', ?, 'community', 'New Event in Hyderabad Cricket Enthusiasts', 'Next weekend mock auction draft opened for registrations.', datetime('now', '-1 day')),
             ('notif_003', ?, 'achievement', 'Badge Unlocked: Pioneer Member', 'You earned the Pioneer Member badge for completing your member profile studio.', datetime('now', '-1 hour'))
@@ -762,8 +762,12 @@ function hashPassword(password) {
     return `scrypt$${salt}$${derived}`;
 }
 function verifyPassword(password, storedHash) {
-    if (!storedHash)
+    if (!storedHash || typeof storedHash !== 'string' || storedHash.trim().length === 0) {
         return { valid: false, needsRehash: false };
+    }
+    if (!password || typeof password !== 'string' || password.length === 0) {
+        return { valid: false, needsRehash: false };
+    }
     if (storedHash.startsWith('scrypt$')) {
         const parts = storedHash.split('$');
         if (parts.length !== 3)
@@ -889,7 +893,7 @@ function seedExtendedDomainData() {
         insertPlayer.run('ply_hyd_006', 'auc_hyd_001', 6, 'Vikram "Smash" Reddy', 'Pace All-Rounder', 650000, 650000, 'UPCOMING', null, 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=700&q=80', JSON.stringify({ matches: 44, strikeRate: 172.5, wickets: 38, economy: 7.4, communityReputation: 92, bestScore: '78* (28b)' }), 'Power hitter who loves clearing the net in Gachibowli. Consistent wicket-taker in the middle overs.');
         // Update player and team metadata for Hyderabad
         exports.db.prepare(`
-      UPDATE auction_rooms 
+      UPDATE auction_rooms
       SET description = 'The ultimate live community cricket bidding arena. 5 franchise tables, marquee local heroes, live gavel hammer, and authentic camaraderie.',
           cover_image_url = 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
           format_category = 'ipl_mock',

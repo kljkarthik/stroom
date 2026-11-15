@@ -17,6 +17,7 @@ import passesRouter from './routes/passes';
 import partnersRouter from './routes/partners';
 import communitiesRouter from './routes/communities';
 import contactRouter from './routes/contact';
+import uploadRouter from './routes/upload';
 
 validateEnvironment();
 
@@ -66,7 +67,8 @@ app.get('/api/health', async (req, res) => {
       integrations: {
         paymentGatewayConfigured: Boolean(process.env.RAZORPAY_KEY_ID || process.env.STRIPE_SECRET_KEY),
         emailProviderConfigured: Boolean(process.env.SMTP_HOST || process.env.RESEND_API_KEY),
-        mediaStorage: 'external_url_references',
+        cloudinaryConfigured: config.isCloudinaryConfigured,
+        mediaStorage: config.isCloudinaryConfigured ? 'cloudinary' : 'external_url_references',
       },
       uptimeSeconds: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
@@ -92,6 +94,7 @@ app.use('/api/passes', passesRouter);
 app.use('/api/partners', partnersRouter);
 app.use('/api/communities', communitiesRouter);
 app.use('/api/contact', contactRouter);
+app.use('/api/upload', uploadRouter);
 
 // Serve static frontend in production
 const clientDistPath = path.resolve(process.cwd(), 'dist');
