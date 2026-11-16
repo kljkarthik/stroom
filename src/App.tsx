@@ -16,7 +16,6 @@ const CommunityDetailsPage = lazy(() => import('./components/communities/Communi
 const AboutPage = lazy(() => import('./components/about/AboutPage').then((m) => ({ default: m.AboutPage })));
 const PartnerWithUsPage = lazy(() => import('./components/partners/PartnerWithUsPage').then((m) => ({ default: m.PartnerWithUsPage })));
 const ContactFaqPage = lazy(() => import('./components/contact/ContactFaqPage').then((m) => ({ default: m.ContactFaqPage })));
-const AuctionHub = lazy(() => import('./components/auction/AuctionHub').then((m) => ({ default: m.AuctionHub })));
 const ParticipantDashboard = lazy(() => import('./components/dashboard/ParticipantDashboard').then((m) => ({ default: m.ParticipantDashboard })));
 const PartnerDashboard = lazy(() => import('./components/dashboard/PartnerDashboard').then((m) => ({ default: m.PartnerDashboard })));
 const AdminHub = lazy(() => import('./components/dashboard/AdminHub').then((m) => ({ default: m.AdminHub })));
@@ -40,9 +39,12 @@ function parseRouteFromPath(pathname: string): { tab: ActiveTab; resourceId?: st
   if (clean === '/partner-with-us') return { tab: 'partner_with_us' };
   if (clean === '/partner' || clean === '/partner-portal') return { tab: 'partner' };
   if (clean === '/contact' || clean === '/faq' || clean === '/faqs') return { tab: 'contact_faq' };
-  if (clean === '/auction' || clean === '/auctions') return { tab: 'auction' };
   if (clean === '/participant' || clean === '/dashboard' || clean === '/passport') return { tab: 'participant' };
   if (clean === '/admin') return { tab: 'admin' };
+  // Safe redirection for any legacy auction URLs -> redirect cleanly to discover
+  if (clean === '/auction' || clean.startsWith('/auction/') || clean === '/auctions' || clean.startsWith('/auctions/')) {
+    return { tab: 'discover' };
+  }
   return { tab: 'landing' };
 }
 
@@ -66,8 +68,6 @@ function getPathForTab(tab: ActiveTab, resourceId?: string): string {
       return '/partner';
     case 'contact_faq':
       return '/contact';
-    case 'auction':
-      return '/auction';
     case 'participant':
       return '/participant';
     case 'admin':
@@ -93,13 +93,11 @@ export const App: React.FC = () => {
 
   // Sub-resource state
   const [selectedEventId, setSelectedEventId] = useState<string>(
-    initialRoute.tab === 'event_details' && initialRoute.resourceId ? initialRoute.resourceId : 'evt_hyd_auction_01'
+    initialRoute.tab === 'event_details' && initialRoute.resourceId ? initialRoute.resourceId : 'evt_hyd_sports_03'
   );
   const [selectedCommunityId, setSelectedCommunityId] = useState<string>(
     initialRoute.tab === 'community_details' && initialRoute.resourceId ? initialRoute.resourceId : 'comm_hyd_cricket'
   );
-  const [selectedAuctionId, setSelectedAuctionId] = useState<string>('auc_hyd_001');
-  const [auctionInitialView, setAuctionInitialView] = useState<'hub' | 'details' | 'arena' | 'results'>('hub');
   const [discoverCategory, setDiscoverCategory] = useState<string>('all');
   const [contactInitialTab, setContactInitialTab] = useState<'faqs' | 'contact'>('faqs');
 
@@ -144,7 +142,11 @@ export const App: React.FC = () => {
       if (intendedTab) {
         const dest = intendedTab;
         setIntendedTab(null);
-        navigateToTab(dest);
+        if (dest === 'event_details') {
+          navigateToTab('event_details', selectedEventId);
+        } else {
+          navigateToTab(dest);
+        }
       } else if (user?.role === 'venue_partner') {
         navigateToTab('partner');
       }
@@ -176,18 +178,10 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const handleGoToAuction = (auctionId?: string, view?: 'hub' | 'details' | 'arena' | 'results') => {
-    if (auctionId) {
-      setSelectedAuctionId(auctionId);
-    }
-    setAuctionInitialView(view || (auctionId ? 'details' : 'hub'));
-    navigateToTab('auction');
-  };
-
   // Scroll to top upon tab switch
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [currentTab, selectedEventId, selectedCommunityId, selectedAuctionId]);
+  }, [currentTab, selectedEventId, selectedCommunityId]);
 
   if (isLoading) {
     return (
@@ -247,7 +241,6 @@ export const App: React.FC = () => {
           {/* 1. Public Landing / Home */}
           {currentTab === 'landing' && (
             <LandingPage
-              onGoToAuction={(auctionId?: string) => handleGoToAuction(auctionId, auctionId ? 'details' : 'hub')}
               onGoToAuth={() => {
                 setIntendedTab(null);
                 setShowAuthModal(true);
@@ -278,8 +271,12 @@ export const App: React.FC = () => {
             <DiscoverEventsPage
               initialCategory={discoverCategory}
               onSelectEvent={(eventId: string) => navigateToTab('event_details', eventId)}
-              onGoToAuction={(auctionId?: string) => handleGoToAuction(auctionId, auctionId ? 'details' : 'hub')}
               onGoToCommunities={() => navigateToTab('communities')}
+              onOpenAuth={(eventId) => {
+                setIntendedTab('event_details');
+                if (eventId) setSelectedEventId(eventId);
+                setShowAuthModal(true);
+              }}
             />
           )}
 
@@ -288,8 +285,12 @@ export const App: React.FC = () => {
             <EventDetailsPage
               eventId={selectedEventId}
               onBack={() => navigateToTab('discover')}
-              onGoToAuction={(auctionId?: string) => handleGoToAuction(auctionId, 'details')}
               onGoToParticipant={() => navigateToTab('participant')}
+              onOpenAuth={(evId) => {
+                setIntendedTab('event_details');
+                if (evId) setSelectedEventId(evId);
+                setShowAuthModal(true);
+              }}
             />
           )}
 
@@ -324,7 +325,6 @@ export const App: React.FC = () => {
               onGoToDiscover={() => navigateToTab('discover')}
               onGoToCommunities={() => navigateToTab('communities')}
               onGoToPartner={() => navigateToTab('partner_with_us')}
-              onGoToAuction={(auctionId?: string) => handleGoToAuction(auctionId, 'hub')}
             />
           )}
 
@@ -346,26 +346,7 @@ export const App: React.FC = () => {
             />
           )}
 
-          {/* 9. Live Auction Hub */}
-          {currentTab === 'auction' && (
-            <ErrorBoundary
-              fallbackTitle="Auction Hub"
-              fallbackMessage="The Auction Hub encountered a display issue. Click Reload to reconnect to the live auction system."
-              dark={true}
-              onReset={() => handleGoToAuction(selectedAuctionId, 'hub')}
-            >
-              <AuctionHub
-                initialAuctionId={selectedAuctionId}
-                initialView={auctionInitialView}
-                onGoToAuth={() => {
-                  setIntendedTab('auction');
-                  setShowAuthModal(true);
-                }}
-              />
-            </ErrorBoundary>
-          )}
-
-          {/* 10. Participant Dashboard & Passes */}
+          {/* 9. Participant Dashboard & Passes */}
           {currentTab === 'participant' && (
             <ErrorBoundary
               fallbackTitle="Participant Hub"
@@ -373,7 +354,6 @@ export const App: React.FC = () => {
               onReset={() => navigateToTab('participant')}
             >
               <ParticipantDashboard
-                onGoToAuction={(auctionId?: string, view?: 'hub' | 'details' | 'arena' | 'results') => handleGoToAuction(auctionId, view)}
                 onExploreEvents={() => navigateToTab('discover')}
                 onTriggerQuiz={() => setIsForceQuiz(true)}
                 onGoToCommunities={() => navigateToTab('communities')}
@@ -383,7 +363,7 @@ export const App: React.FC = () => {
             </ErrorBoundary>
           )}
 
-          {/* 11. Partner Dashboard */}
+          {/* 10. Partner Dashboard */}
           {currentTab === 'partner' && (
             <ErrorBoundary
               fallbackTitle="STROOM Business Partner Portal"
@@ -400,16 +380,14 @@ export const App: React.FC = () => {
             </ErrorBoundary>
           )}
 
-          {/* 12. Admin Console */}
+          {/* 11. Admin Console */}
           {currentTab === 'admin' && (
             <ErrorBoundary
               fallbackTitle="STROOM Admin Control Center"
               fallbackMessage="The Admin Console encountered an unexpected rendering issue. Click Reload to restore."
               onReset={() => navigateToTab('admin')}
             >
-              <AdminHub
-                onGoToLiveAuction={(auctionId?: string) => handleGoToAuction(auctionId, 'arena')}
-              />
+              <AdminHub />
             </ErrorBoundary>
           )}
           </Suspense>
@@ -420,6 +398,10 @@ export const App: React.FC = () => {
           currentTab={currentTab}
           onSelectTab={(tab) => navigateToTab(tab)}
           onTriggerQuiz={() => setIsForceQuiz(true)}
+          onOpenAuth={() => {
+            setIntendedTab('participant');
+            setShowAuthModal(true);
+          }}
         />
       </OnboardingGuard>
     </div>

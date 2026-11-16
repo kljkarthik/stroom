@@ -29,7 +29,6 @@ const REPORT_EXPORTS = [
   { type: 'members', label: 'Members Directory (CSV)' },
   { type: 'partners', label: 'Partners List (CSV)' },
   { type: 'campaigns', label: 'Campaign Redemptions (CSV)' },
-  { type: 'auctions', label: 'Auction Summary (CSV)' },
 ];
 
 export const AdminAnalyticsSettingsAuditPanel: React.FC<AdminAnalyticsSettingsAuditPanelProps> = ({
@@ -187,9 +186,9 @@ export const AdminAnalyticsSettingsAuditPanel: React.FC<AdminAnalyticsSettingsAu
           </h2>
           <p className="text-xs text-stroom-charcoal/70">
             {mode === 'analytics'
-              ? 'Real SQLite breakdowns across cities, categories, attendance rates, member growth, partners, and auctions.'
+              ? 'Real SQLite breakdowns across cities, categories, attendance rates, member growth, and partners.'
               : mode === 'settings'
-              ? 'Configure operational rules for General, Events, Members, Partners, Auctions, and Notifications.'
+              ? 'Configure operational rules for General, Events, Members, Partners, and Notifications.'
               : 'Read-only chronological trail of every privileged login, role change, moderation decision, check-in, and setting update.'}
           </p>
         </div>
@@ -259,7 +258,6 @@ export const AdminAnalyticsSettingsAuditPanel: React.FC<AdminAnalyticsSettingsAu
             >
               <option value="all">All Categories</option>
               <option value="cricket">Cricket</option>
-              <option value="auction">Auction</option>
               <option value="social">Social</option>
               <option value="gaming">Gaming</option>
               <option value="cafe">Cafe</option>
@@ -402,8 +400,8 @@ export const AdminAnalyticsSettingsAuditPanel: React.FC<AdminAnalyticsSettingsAu
 
               {/* Ecosystem & Partner Summary */}
               <div className="p-5 rounded-3xl bg-white border border-stroom-borderLight shadow-sm space-y-3">
-                <h3 className="text-sm font-black text-stroom-black">Partners, Campaigns & Auctions</h3>
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <h3 className="text-sm font-black text-stroom-black">Partners & Campaigns</h3>
+                <div className="grid grid-cols-3 gap-3 text-xs">
                   <div className="p-3.5 rounded-2xl bg-stroom-ivory">
                     <div className="text-stone-500 font-bold">Verified Partners</div>
                     <div className="text-xl font-black text-stroom-black mt-1">
@@ -420,12 +418,6 @@ export const AdminAnalyticsSettingsAuditPanel: React.FC<AdminAnalyticsSettingsAu
                     <div className="text-stone-500 font-bold">Coupon Redemptions</div>
                     <div className="text-xl font-black text-stroom-black mt-1">
                       {analytics.partnerAndCampaignStats?.totalCouponRedemptions ?? 0}
-                    </div>
-                  </div>
-                  <div className="p-3.5 rounded-2xl bg-stroom-ivory">
-                    <div className="text-stone-500 font-bold">Total Auction Bids</div>
-                    <div className="text-xl font-black text-stroom-black mt-1">
-                      {analytics.partnerAndCampaignStats?.totalBidsPlaced ?? 0}
                     </div>
                   </div>
                 </div>
@@ -616,7 +608,6 @@ export const AdminAnalyticsSettingsAuditPanel: React.FC<AdminAnalyticsSettingsAu
               <option value="community_post">Moderation Posts</option>
               <option value="partner">Partners</option>
               <option value="venue">Venues</option>
-              <option value="auction">Auctions</option>
               <option value="platform_settings">Settings</option>
             </select>
 

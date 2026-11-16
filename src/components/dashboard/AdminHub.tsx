@@ -6,7 +6,7 @@ import { AdminOverviewPanel } from '../admin/AdminOverviewPanel';
 import { AdminEventsCitiesPanel } from '../admin/AdminEventsCitiesPanel';
 import { AdminMembersRolesPanel } from '../admin/AdminMembersRolesPanel';
 import { AdminCommunitiesModerationPanel } from '../admin/AdminCommunitiesModerationPanel';
-import { AdminAuctionsCheckinPanel } from '../admin/AdminAuctionsCheckinPanel';
+import { AdminCheckinPanel } from '../admin/AdminCheckinPanel';
 import { AdminVenuesFinancePanel } from '../admin/AdminVenuesFinancePanel';
 import { AdminAnalyticsSettingsAuditPanel } from '../admin/AdminAnalyticsSettingsAuditPanel';
 import { useAuth, isDemoAuthEnabled } from '../../context/AuthContext';
@@ -16,7 +16,6 @@ import {
   Calendar,
   Users,
   Compass,
-  Trophy,
   Building2,
   MapPin,
   ScanLine,
@@ -39,9 +38,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 
-interface AdminHubProps {
-  onGoToLiveAuction?: (auctionId?: string) => void;
-}
+interface AdminHubProps {}
 
 interface NavItemConfig {
   key: string;
@@ -55,7 +52,6 @@ const ADMIN_NAV_ITEMS: NavItemConfig[] = [
   { key: 'events', label: 'Events & Cities', group: 'Core Operations', icon: Calendar },
   { key: 'members', label: 'Members & Roles', group: 'Core Operations', icon: Users },
   { key: 'communities', label: 'Communities', group: 'Core Operations', icon: Compass },
-  { key: 'auctions', label: 'Auction Management', group: 'Core Operations', icon: Trophy },
   { key: 'partners', label: 'Partner Management', group: 'Ecosystem & Venue', icon: Building2 },
   { key: 'venues', label: 'Venue Management', group: 'Ecosystem & Venue', icon: MapPin },
   { key: 'checkin', label: 'Door Check-in', group: 'Ecosystem & Venue', icon: ScanLine },
@@ -68,7 +64,7 @@ const ADMIN_NAV_ITEMS: NavItemConfig[] = [
   { key: 'audit_logs', label: 'Audit Logs', group: 'Governance & System', icon: FileText },
 ];
 
-export const AdminHub: React.FC<AdminHubProps> = ({ onGoToLiveAuction }) => {
+export const AdminHub: React.FC<AdminHubProps> = () => {
   const { user, isAuthenticated, loginAsDemoUser, logout } = useAuth();
 
   const [loadingPerms, setLoadingPerms] = useState(true);
@@ -175,7 +171,7 @@ export const AdminHub: React.FC<AdminHubProps> = ({ onGoToLiveAuction }) => {
             </h2>
             <p className="text-xs text-stroom-charcoal/75 mt-2">
               {permError ||
-                'This workspace requires an authorized STROOM administrator, manager, auctioneer, or door staff role.'}
+                'This workspace requires an authorized STROOM administrator, manager, or door staff role.'}
             </p>
             {user && (
               <p className="text-[11px] font-mono text-stone-500 mt-2">
@@ -195,12 +191,6 @@ export const AdminHub: React.FC<AdminHubProps> = ({ onGoToLiveAuction }) => {
                   className="px-4 py-2 rounded-xl bg-stroom-orange text-white font-black text-xs hover:bg-stroom-deep transition-colors"
                 >
                   Sign in as Demo Admin
-                </button>
-                <button
-                  onClick={() => loginAsDemoUser('auctioneer')}
-                  className="px-4 py-2 rounded-xl bg-stroom-black text-white font-black text-xs hover:bg-stroom-charcoal transition-colors"
-                >
-                  Demo Auctioneer
                 </button>
                 <button
                   onClick={() => loginAsDemoUser('checkin')}
@@ -261,16 +251,8 @@ export const AdminHub: React.FC<AdminHubProps> = ({ onGoToLiveAuction }) => {
         return <AdminCommunitiesModerationPanel mode="communities" permissions={permissions} />;
       case 'moderation':
         return <AdminCommunitiesModerationPanel mode="moderation" permissions={permissions} />;
-      case 'auctions':
-        return (
-          <AdminAuctionsCheckinPanel
-            mode="auctions"
-            permissions={permissions}
-            onGoToLiveAuction={onGoToLiveAuction}
-          />
-        );
       case 'checkin':
-        return <AdminAuctionsCheckinPanel mode="checkin" permissions={permissions} />;
+        return <AdminCheckinPanel permissions={permissions} />;
       case 'partners':
         return <AdminPartnerManager />;
       case 'venues':
@@ -515,21 +497,6 @@ export const AdminHub: React.FC<AdminHubProps> = ({ onGoToLiveAuction }) => {
                               >
                                 <span className="font-bold">{v.name}</span>
                                 <span className="text-[10px] text-stone-500">{v.area}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {searchResults.auctions?.length > 0 && (
-                          <div>
-                            <div className="text-[10px] font-black uppercase text-stone-400 px-2 mb-1">Auctions</div>
-                            {searchResults.auctions.map((a: any) => (
-                              <button
-                                key={a.id}
-                                onClick={() => navigateSection('auctions')}
-                                className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-stroom-ivory flex justify-between"
-                              >
-                                <span className="font-bold">{a.title}</span>
-                                <span className="text-[10px] text-stroom-orange font-black">{a.status}</span>
                               </button>
                             ))}
                           </div>

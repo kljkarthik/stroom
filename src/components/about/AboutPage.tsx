@@ -21,14 +21,12 @@ interface AboutPageProps {
   onGoToDiscover: () => void;
   onGoToCommunities: () => void;
   onGoToPartner: () => void;
-  onGoToAuction?: () => void;
 }
 
 export const AboutPage: React.FC<AboutPageProps> = ({
   onGoToDiscover,
   onGoToCommunities,
   onGoToPartner,
-  onGoToAuction,
 }) => {
   return (
     <div className="min-h-screen bg-stroom-ivory text-stroom-black pb-24">
@@ -86,7 +84,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
             </div>
             <h3 className="text-base font-black text-stroom-black uppercase">Discover Common Interests</h3>
             <p className="mt-2 text-xs text-stroom-charcoal/80 font-medium leading-relaxed">
-              Bond naturally over sports, cricket auctions, board games, cinema, cafes, and outdoor thrills.
+              Bond naturally over turf sports, board games, cinema, cafes, and outdoor thrills.
             </p>
           </div>
 
@@ -129,7 +127,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
               STROOM was born in Hyderabad with an audacious belief: <strong>human connection thrives when people share an activity they genuinely care about.</strong>
             </p>
             <p>
-              Instead of forced networking or superficial speed-dating, we pioneered experience-first social spaces. We started with our flagship Live Cricket Auctions—putting cricket fans in the owner’s seat to bid, strategize, and celebrate together. We quickly expanded into curated café crawls, retro gaming tournaments, sunrise cycling trails, and indie film mixers.
+              Instead of forced networking or superficial speed-dating, we pioneered experience-first social spaces. We started with our flagship turf leagues—bringing sports fans together on the pitch to compete, strategize, and celebrate together. We quickly expanded into curated café crawls, retro gaming tournaments, sunrise cycling trails, and indie film mixers.
             </p>
             <p>
               Today, STROOM is active across Hyderabad and Pune, with Bangalore and Mumbai launching next. Every weekend, hundreds of strangers walk in, and walk out as friends with stories to tell.
@@ -176,7 +174,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
             <div>
               <h3 className="text-base font-black text-stroom-black uppercase">Shared Excitement</h3>
               <p className="mt-1.5 text-xs text-stroom-charcoal/80 font-medium leading-relaxed">
-                Energy multiplies when experienced together. From the suspense of a final auction bid to solving a team trivia puzzle, we celebrate every win.
+                Energy multiplies when experienced together. From the thrill of a match point to solving a team trivia puzzle, we celebrate every win.
               </p>
             </div>
           </div>
@@ -219,7 +217,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                 </span>
               </div>
               <p className="text-xs text-stone-300 font-medium leading-relaxed">
-                Active in Madhapur, Jubilee Hills, Gachibowli, and Financial District. Home to our flagship cricket auctions, sports leagues, and cafe circles.
+                Active in Madhapur, Jubilee Hills, Gachibowli, and Financial District. Home to our flagship turf leagues, sports meetups, and cafe circles.
               </p>
             </div>
 

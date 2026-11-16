@@ -316,7 +316,7 @@ export const StroomPassportView: React.FC<StroomPassportViewProps> = ({
                     Your Passport is Ready For Its First Stamp!
                   </h4>
                   <p className="text-xs text-stroom-charcoal/80 max-w-sm mx-auto mt-1 leading-relaxed">
-                    Whenever you attend a STROOM meetup, sports blitz, or live cricket auction and check in at the door, an authentic digital stamp will appear here permanently.
+                    Whenever you attend a STROOM meetup, sports blitz, or community gathering and check in at the door, an authentic digital stamp will appear here permanently.
                   </p>
                 </div>
                 {onExploreEvents && (
@@ -344,9 +344,7 @@ export const StroomPassportView: React.FC<StroomPassportViewProps> = ({
 
                     <div className="flex items-start gap-3.5 relative z-10">
                       <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-stroom-cream to-white border border-stroom-gold/50 flex items-center justify-center text-stroom-gold shrink-0 shadow-sm">
-                        {stamp.category?.includes('auction') ? (
-                          <Trophy className="w-6 h-6 text-stroom-orange" />
-                        ) : stamp.category?.includes('sport') ? (
+                        {stamp.category?.includes('sport') ? (
                           <Flame className="w-6 h-6 text-stroom-deep" />
                         ) : stamp.category?.includes('cafe') ? (
                           <Coffee className="w-6 h-6 text-amber-600" />

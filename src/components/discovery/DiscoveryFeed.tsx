@@ -19,10 +19,9 @@ import {
 
 interface DiscoveryFeedProps {
   onStartQuiz: () => void;
-  onGoToAuction?: () => void;
 }
 
-export const DiscoveryFeed: React.FC<DiscoveryFeedProps> = ({ onStartQuiz, onGoToAuction }) => {
+export const DiscoveryFeed: React.FC<DiscoveryFeedProps> = ({ onStartQuiz }) => {
   const { user } = useAuth();
   const [items, setItems] = useState<DiscoveryItem[]>([]);
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -81,36 +80,6 @@ export const DiscoveryFeed: React.FC<DiscoveryFeedProps> = ({ onStartQuiz, onGoT
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 pb-24 animate-fade-in text-stroom-black">
-      
-      {/* Featured Auction Hero Banner in Community Feed */}
-      {onGoToAuction && (
-        <div className="mb-8 p-6 rounded-3xl bg-gradient-to-r from-stroom-charcoal via-stroom-black to-stroom-cardDark text-white border border-stroom-orange/30 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden">
-          <div className="relative z-10 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-stroom-orange flex items-center justify-center text-white shadow-brand">
-              <Trophy className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-stroom-orange">
-                Flagship Community Event
-              </span>
-              <h3 className="text-base sm:text-lg font-black text-white font-display">
-                STROOM Live Cricket Player Auction Hub
-              </h3>
-              <p className="text-xs text-stroom-cream/70 mt-0.5">
-                Join live bidding tables, draft squads, and experience the thrill!
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onGoToAuction}
-            className="relative z-10 px-5 py-2.5 rounded-xl bg-stroom-orange text-white font-extrabold text-xs shadow-brand hover:brightness-105 active:scale-95 transition-all flex items-center gap-1.5 whitespace-nowrap self-stretch sm:self-auto justify-center"
-          >
-            <span>Enter Auction Arena</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {/* Top Banner based on Onboarding Status */}
       {user?.onboarding_status === 'SKIPPED' && (
         <div className="mb-6 p-5 rounded-3xl bg-stroom-cream/80 border border-stroom-orange/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
@@ -174,7 +143,7 @@ export const DiscoveryFeed: React.FC<DiscoveryFeedProps> = ({ onStartQuiz, onGoT
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search communities, cricket auctions, cafe meetups, travel trips..."
+          placeholder="Search communities, sports tournaments, cafe meetups, travel trips..."
           className="w-full pl-10 pr-4 py-3 bg-white border border-stroom-borderLight rounded-2xl text-sm font-semibold text-stroom-black placeholder-stone-400 focus:outline-none focus:border-stroom-orange focus:ring-2 focus:ring-stroom-orange/20 transition-all shadow-xs"
         />
         {searchQuery && (

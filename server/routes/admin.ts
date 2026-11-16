@@ -141,9 +141,9 @@ router.get('/versions/:id', requirePermission('quiz.manage'), async (req: AuthRe
   }
 });
 
-// 4. POST /api/admin/quizzes/:quizId/versions
+// 4. POST /api/admin/quizzes/:quizId/versions & /api/admin/quizzes/:quizId/create-draft
 // Clones active published version (or latest version) into a new editable 'draft' version
-router.post('/quizzes/:quizId/versions', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
+router.post(['/quizzes/:quizId/versions', '/quizzes/:quizId/create-draft'], requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
     const adapter = getDatabaseAdapter();
     const { quizId } = req.params;
@@ -154,9 +154,12 @@ router.post('/quizzes/:quizId/versions', requirePermission('quiz.manage'), async
     `, [quizId]);
 
     if (existingDraft) {
-      return res.status(409).json({
-        error: 'A draft version already exists. Edit or publish the existing draft before creating a new one.',
-        draft_id: existingDraft.id
+      const existing = await adapter.queryOne('SELECT * FROM quiz_versions WHERE id = ?', [existingDraft.id]);
+      return res.status(200).json({
+        message: 'Draft version already exists',
+        draft_version_id: existingDraft.id,
+        draft_id: existingDraft.id,
+        version: existing,
       });
     }
 
@@ -220,6 +223,7 @@ router.post('/quizzes/:quizId/versions', requirePermission('quiz.manage'), async
     return res.status(201).json({
       message: `Draft version ${newVersionNumber} created successfully`,
       version: created,
+      draft_version_id: newVersionId,
     });
   } catch (err: any) {
     console.error('Error creating draft version:', err);
@@ -232,19 +236,19 @@ router.post('/quizzes/:quizId/versions', requirePermission('quiz.manage'), async
 router.post('/questions', requirePermission('quiz.manage'), async (req: AuthRequest, res: Response) => {
   try {
     const adapter = getDatabaseAdapter();
+    const question_type = req.body.question_type || 'single';
     const {
       quiz_version_id,
       question_text,
       description,
-      question_type,
       is_required,
       min_selections,
       max_selections,
       options
     } = req.body;
 
-    if (!quiz_version_id || !question_text || !question_type) {
-      return res.status(400).json({ error: 'quiz_version_id, question_text, and question_type are required' });
+    if (!quiz_version_id || !question_text) {
+      return res.status(400).json({ error: 'quiz_version_id and question_text are required' });
     }
 
     const version = await adapter.queryOne<any>('SELECT publication_status FROM quiz_versions WHERE id = ?', [quiz_version_id]);

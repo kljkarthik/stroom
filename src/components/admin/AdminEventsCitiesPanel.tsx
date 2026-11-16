@@ -58,7 +58,7 @@ export const AdminEventsCitiesPanel: React.FC<AdminEventsCitiesPanelProps> = ({ 
   const [eventForm, setEventForm] = useState({
     title: '',
     description: '',
-    category: 'cricket_auction',
+    category: 'sports',
     city_id: 'city_hyd',
     venue_id: 'ven_hyd_thirdwave',
     event_date: 'Saturday, Dec 12, 2026',
@@ -155,7 +155,7 @@ export const AdminEventsCitiesPanel: React.FC<AdminEventsCitiesPanelProps> = ({ 
     setEventForm({
       title: '',
       description: '',
-      category: 'cricket_auction',
+      category: 'sports',
       city_id: cities[0]?.id || 'city_hyd',
       venue_id: venues[0]?.id || 'ven_hyd_thirdwave',
       event_date: 'Saturday, Dec 12, 2026',
@@ -176,7 +176,7 @@ export const AdminEventsCitiesPanel: React.FC<AdminEventsCitiesPanelProps> = ({ 
     setEventForm({
       title: ev.title || '',
       description: ev.description || '',
-      category: ev.category || 'cricket_auction',
+      category: ev.category || 'sports',
       city_id: ev.city_id || 'city_hyd',
       venue_id: ev.venue_id || 'ven_hyd_thirdwave',
       event_date: ev.event_date || '',
@@ -819,7 +819,6 @@ export const AdminEventsCitiesPanel: React.FC<AdminEventsCitiesPanelProps> = ({ 
                 <div>
                   <label className="block font-bold uppercase text-stone-500 mb-1">Category</label>
                   <select value={eventForm.category} onChange={(e) => setEventForm({ ...eventForm, category: e.target.value })} className="w-full px-2 py-2 rounded-xl border border-stroom-borderLight bg-white font-semibold">
-                    <option value="cricket_auction">Cricket Auction</option>
                     <option value="sports">Sports</option>
                     <option value="cafe_meetup">Café Meetup</option>
                     <option value="gaming">Gaming</option>
@@ -1114,14 +1113,14 @@ export const AdminEventsCitiesPanel: React.FC<AdminEventsCitiesPanelProps> = ({ 
                 <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 space-y-1">
                   <p className="font-black">Permanent Deletion Disabled — Protected Historical Records Found</p>
                   <p>
-                    This event has linked registrations, attendance stamps, payment records, or auction/partner records. You can safely <strong>Archive Event</strong> or <strong>Cancel Event</strong> while preserving 100% of participant, QR check-in, and financial records.
+                    This event has linked registrations, attendance stamps, payment records, or partner records. You can safely <strong>Archive Event</strong> or <strong>Cancel Event</strong> while preserving 100% of participant, QR check-in, and financial records.
                   </p>
                 </div>
               ) : (
                 <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-[11px] text-red-800 space-y-1">
                   <p className="font-black">Zero Dependent Records Found</p>
                   <p>
-                    No registrations, attendance stamps, payment records, or linked auction/partner dependencies exist on this event. You may safely archive, cancel, or <strong>Delete Permanently</strong>.
+                    No registrations, attendance stamps, payment records, or linked partner dependencies exist on this event. You may safely archive, cancel, or <strong>Delete Permanently</strong>.
                   </p>
                 </div>
               )}

@@ -160,7 +160,7 @@ export const ContactFaqPage: React.FC<ContactFaqPageProps> = ({
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
             <input
               type="text"
-              placeholder="Search questions (e.g. auction, pass, refunds, solo attendees)..."
+              placeholder="Search questions (e.g. events, pass, refunds, solo attendees)..."
               value={faqSearch}
               onChange={(e) => setFaqSearch(e.target.value)}
               className="w-full pl-11 pr-4 py-3 bg-white border border-stroom-borderLight rounded-2xl text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-stroom-orange shadow-xs"
@@ -394,7 +394,7 @@ export const ContactFaqPage: React.FC<ContactFaqPageProps> = ({
                         >
                           <option value="General Inquiry">General Inquiry</option>
                           <option value="Event Registration & Pass Help">Event Registration & Pass Help</option>
-                          <option value="Cricket Auction Arena Assistance">Cricket Auction Arena Assistance</option>
+                          <option value="Event Experience Assistance">Event Experience Assistance</option>
                           <option value="Community Chapter Leadership">Community Chapter Leadership</option>
                           <option value="Venue Partnership">Venue Partnership</option>
                           <option value="Feedback / Suggestions">Feedback / Suggestions</option>

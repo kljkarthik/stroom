@@ -63,7 +63,7 @@ export const QuizCompletionScreen: React.FC<QuizCompletionScreenProps> = ({
         </h1>
 
         <p className="text-xs sm:text-sm text-stroom-charcoal/80 max-w-sm mx-auto leading-relaxed">
-          We've personalized your STROOM feed. Discover live cricket auction tables, sports matches, and social mixers matching your passions.
+          We've personalized your STROOM feed. Discover sports matches, creative workshops, and social mixers matching your passions.
         </p>
       </div>
 

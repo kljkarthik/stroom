@@ -27,7 +27,7 @@ export const StroomLogo: React.FC<StroomLogoProps> = ({
     projector: { h: 'h-28 sm:h-36', w: 'w-[430px] sm:w-[550px]', tag: 'text-lg sm:text-xl' },
   };
 
-  const isLight = variant === 'light'; // Light text for dark backgrounds (live auction, dark cards)
+  const isLight = variant === 'light'; // Light text for dark backgrounds (dark banners, dark cards)
   const textColor = isLight ? '#FFFFFF' : '#17120F';
   const subtitleColor = isLight ? '#FFF7EC' : '#241A14';
   const gradId = `stroomOrangeGrad_${variant}_${size}`;

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, OnboardingStatus, UserRole } from '../types';
 import { api } from '../services/api';
 
-export type DemoRoleType = 'newUser' | 'admin' | 'completedUser' | 'user' | 'auctioneer' | 'partner' | 'checkin';
+export type DemoRoleType = 'newUser' | 'admin' | 'completedUser' | 'user' | 'partner' | 'checkin';
 
 export const isDemoAuthEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_AUTH === 'true';
 
@@ -13,7 +13,6 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
-  isAuctioneer: boolean;
   isPartner: boolean;
   isCheckinStaff: boolean;
   login: (email: string, password: string) => Promise<User>;
@@ -131,9 +130,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const resetRes = await api.resetDemo('COMPLETED');
           setUser(resetRes.user);
           return resetRes.user;
-        } else if (type === 'auctioneer') {
-          await switchUserRole('auctioneer');
-          return { ...u, role: 'auctioneer' };
         } else if (type === 'checkin') {
           await switchUserRole('checkin_staff');
           return { ...u, role: 'checkin_staff' };
@@ -150,8 +146,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     'super_admin',
     'platform_admin',
     'event_manager',
-    'auctioneer',
-    'auction_manager',
     'community_manager',
     'partner_manager',
     'checkin_staff',
@@ -159,7 +153,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ];
   const isAdminRole = !!user?.role && adminStaffRoles.includes(user.role);
   const isSuperAdminRole = user?.role === 'super_admin';
-  const isAuctioneerRole = user?.role === 'auctioneer' || user?.role === 'auction_manager' || user?.role === 'admin' || isSuperAdminRole;
   const isPartnerRole = user?.role === 'venue_partner' || user?.role === 'partner_manager' || user?.role === 'admin' || isSuperAdminRole;
   const isCheckinStaffRole = user?.role === 'checkin_staff' || user?.role === 'event_manager' || user?.role === 'admin' || isSuperAdminRole;
 
@@ -172,7 +165,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isAdmin: isAdminRole,
         isSuperAdmin: isSuperAdminRole,
-        isAuctioneer: isAuctioneerRole,
         isPartner: isPartnerRole,
         isCheckinStaff: isCheckinStaffRole,
         login,

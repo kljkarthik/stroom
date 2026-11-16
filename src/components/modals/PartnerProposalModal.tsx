@@ -101,7 +101,7 @@ export const PartnerProposalModal: React.FC<PartnerProposalModalProps> = ({ isOp
             Partner With STROOM
           </h3>
           <p className="text-xs text-stroom-cream/80 mt-1">
-            Turn your space into a high-energy community hub. Host verified cricket auctions, gaming nights, and social mixers.
+            Turn your space into a high-energy community hub. Host verified turf games, gaming nights, and social mixers.
           </p>
         </div>
 

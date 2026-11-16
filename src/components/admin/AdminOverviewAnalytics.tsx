@@ -42,8 +42,6 @@ const STROOM_PALETTE = [
 const SEMANTIC_COLORS: Record<string, string> = {
   // Categories
   'Cricket & Sports': '#FF6900',
-  'Cricket & Auctions': '#FF6900',
-  'Cricket Auctions': '#C45100',
   Gaming: '#17120F',
   'Café Meetups': '#D9A441',
   Movies: '#8C4315',

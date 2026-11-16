@@ -50,8 +50,10 @@ const CITIES = [
   { id: 'all', name: 'All Cities' },
   { id: 'city_hyd', name: 'Hyderabad' },
   { id: 'city_pune', name: 'Pune' },
-  { id: 'city_blr', name: 'Bangalore' },
-  { id: 'city_mum', name: 'Mumbai' },
+  { id: 'city_mum', name: 'Mumbai (Coming Soon)' },
+  { id: 'city_delhi', name: 'Delhi (Coming Soon)' },
+  { id: 'city_blr', name: 'Bangalore (Coming Soon)' },
+  { id: 'city_kolkata', name: 'Kolkata (Coming Soon)' },
 ];
 
 export const CommunitiesPage: React.FC<CommunitiesPageProps> = ({
@@ -152,7 +154,7 @@ export const CommunitiesPage: React.FC<CommunitiesPageProps> = ({
                 Find Your <span className="text-stroom-orange">People</span>.
               </h1>
               <p className="mt-2 text-stroom-charcoal/80 text-sm sm:text-base max-w-2xl font-medium">
-                Connect with active groups for sports, auctions, cafes, and passions. Regular meetups, shared interests, and real-world friendships.
+                Connect with active groups for sports, board games, cafes, and passions. Regular meetups, shared interests, and real-world friendships.
               </p>
             </div>
 

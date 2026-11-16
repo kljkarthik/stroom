@@ -29,8 +29,6 @@ const ROLE_OPTIONS = [
   { value: 'participant', label: 'Participant' },
   { value: 'user', label: 'Member (Legacy)' },
   { value: 'checkin_staff', label: 'Door Check-in Staff' },
-  { value: 'auctioneer', label: 'Auctioneer' },
-  { value: 'auction_manager', label: 'Auction Manager' },
   { value: 'event_manager', label: 'Event Manager' },
   { value: 'community_manager', label: 'Community Manager' },
   { value: 'partner_manager', label: 'Partner Manager' },
@@ -45,9 +43,7 @@ const BADGE_OPTIONS = [
   { key: 'FIRST_EXPERIENCE', label: 'First Experience' },
   { key: 'THREE_EVENTS', label: 'Three Events Veteran' },
   { key: 'CITY_EXPLORER', label: 'City Explorer' },
-  { key: 'AUCTION_PLAYER', label: 'Auction Player' },
   { key: 'COMMUNITY_BUILDER', label: 'Community Builder' },
-  { key: 'AUCTION_CHAMPION', label: 'Auction Champion' },
   { key: 'VERIFIED_MEMBER', label: 'Verified STROOM Member' },
 ];
 

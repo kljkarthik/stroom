@@ -23,19 +23,22 @@ import {
   Check
 } from 'lucide-react';
 
+import { useAuth } from '../../context/AuthContext';
+
 interface EventDetailsPageProps {
   eventId: string;
   onBack: () => void;
-  onGoToAuction?: () => void;
   onGoToParticipant?: () => void;
+  onOpenAuth?: (eventId?: string) => void;
 }
 
 export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
   eventId,
   onBack,
-  onGoToAuction,
   onGoToParticipant,
+  onOpenAuth,
 }) => {
+  const { isAuthenticated } = useAuth();
   const [event, setEvent] = useState<(Event & { venue_capacity?: number; venue_tier?: string }) | null>(null);
   const [userRegistration, setUserRegistration] = useState<EventRegistration | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -471,22 +474,19 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
                   </div>
                 ) : (
                   <button
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={() => {
+                      if (!isAuthenticated) {
+                        if (onOpenAuth) {
+                          onOpenAuth(eventId);
+                        }
+                        return;
+                      }
+                      setIsModalOpen(true);
+                    }}
                     className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-black text-sm shadow-brand hover:brightness-105 active:scale-98 transition-all flex items-center justify-center gap-2 uppercase tracking-wide"
                   >
                     <Ticket className="w-4 h-4" />
                     <span>Register For Experience</span>
-                  </button>
-                )}
-
-                {/* If cricket auction, highlight live hub */}
-                {event.category === 'cricket' && onGoToAuction && (
-                  <button
-                    onClick={onGoToAuction}
-                    className="w-full py-2.5 px-4 rounded-xl bg-stroom-black hover:bg-stone-800 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    <Flame className="w-4 h-4 text-stroom-orange" />
-                    <span>Open Live Cricket Auction Arena</span>
                   </button>
                 )}
               </div>

@@ -70,7 +70,7 @@ export async function evaluateUserAchievements(userId: string): Promise<string[]
         COUNT(DISTINCT r.id) as attended_count,
         COUNT(DISTINCT e.category) as distinct_categories,
         COUNT(DISTINCT c.name) as distinct_cities,
-        SUM(CASE WHEN e.category IN ('sports', 'cricket_auction', 'fitness') THEN 1 ELSE 0 END) as sports_count
+        SUM(CASE WHEN e.category IN ('sports', 'fitness') THEN 1 ELSE 0 END) as sports_count
       FROM event_registrations r
       JOIN events e ON r.event_id = e.id
       JOIN cities c ON e.city_id = c.id
@@ -86,14 +86,7 @@ export async function evaluateUserAchievements(userId: string): Promise<string[]
     const commRow = await adapter.queryOne('SELECT COUNT(*) as c FROM community_members WHERE user_id = ?', [userId]);
     const commCount = Number(commRow?.c) || 0;
 
-    // 3. Auction activity count
-    const bidRow = await adapter.queryOne('SELECT COUNT(*) as c FROM bids WHERE bidder_user_id = ?', [userId]);
-    const bidCount = Number(bidRow?.c) || 0;
-    const auctionRegRow = await adapter.queryOne('SELECT COUNT(*) as c FROM auction_registrations WHERE user_id = ?', [userId]);
-    const auctionRegCount = Number(auctionRegRow?.c) || 0;
-    const auctionActivity = bidCount + auctionRegCount;
-
-    // 4. Profile completion
+    // 3. Profile completion
     const profilePct = calculateProfileCompletion(user);
 
     // Get all master achievements
@@ -117,9 +110,6 @@ export async function evaluateUserAchievements(userId: string): Promise<string[]
           break;
         case 'communities_joined':
           qualified = commCount >= ach.requirement_threshold;
-          break;
-        case 'auction_participation':
-          qualified = auctionActivity >= ach.requirement_threshold;
           break;
         case 'sports_events':
           qualified = sportsCount >= ach.requirement_threshold;

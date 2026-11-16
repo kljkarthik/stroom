@@ -35,7 +35,6 @@ import {
 } from 'lucide-react';
 
 interface ParticipantDashboardProps {
-  onGoToAuction?: (auctionId?: string, view?: 'hub' | 'details' | 'arena' | 'results') => void;
   onExploreEvents?: () => void;
   onTriggerQuiz?: () => void;
   onGoToCommunities?: () => void;
@@ -46,7 +45,6 @@ interface ParticipantDashboardProps {
 export type ParticipantHubTab = 'overview' | 'events' | 'communities' | 'passport' | 'studio' | 'activity';
 
 export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
-  onGoToAuction,
   onExploreEvents,
   onTriggerQuiz,
   onGoToCommunities,
@@ -107,7 +105,7 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
     }
   };
 
-  const member = profileData?.user || user;
+  const member = { ...(profileData?.user || {}), ...(user || {}) };
   const stats = profileData?.stats || {
     totalRegistered: 0,
     totalAttended: 0,
@@ -361,16 +359,6 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
                         <span>View Digital Pass</span>
                       </button>
 
-                      {upcomingEvents[0].category?.includes('auction') && onGoToAuction && (
-                        <button
-                          onClick={() => onGoToAuction(undefined, 'arena')}
-                          className="px-4 py-2 rounded-xl bg-stroom-black text-white font-black text-xs hover:bg-stone-800 flex items-center gap-1.5"
-                        >
-                          <Trophy className="w-3.5 h-3.5 text-stroom-orange" />
-                          <span>Enter Auction Arena</span>
-                        </button>
-                      )}
-
                       <button
                         onClick={() => handleCancelPass(upcomingEvents[0].pass_id)}
                         disabled={cancellingPassId === upcomingEvents[0].pass_id}
@@ -389,7 +377,7 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
                   No Upcoming Registrations
                 </h4>
                 <p className="text-xs text-stroom-charcoal/80 max-w-sm mx-auto">
-                  You don't have an active event ticket right now. Explore our city calendar for IPL cricket auctions, sports blitzes, and coffee meetups.
+                  You don't have an active event ticket right now. Explore our city calendar for sports blitzes, social mixers, and coffee meetups.
                 </p>
                 {onExploreEvents && (
                   <button
@@ -439,11 +427,7 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
                         className="p-3 rounded-2xl bg-stroom-ivory border border-stroom-borderLight flex items-center gap-2.5"
                       >
                         <div className="w-9 h-9 rounded-xl bg-white border border-stroom-gold/40 flex items-center justify-center text-stroom-gold shrink-0">
-                          {stamp.category?.includes('auction') ? (
-                            <Trophy className="w-4 h-4 text-stroom-orange" />
-                          ) : (
-                            <Award className="w-4 h-4 text-stroom-gold" />
-                          )}
+                          <Award className="w-4 h-4 text-stroom-gold" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-black text-stroom-black truncate">{stamp.event_title}</p>
@@ -643,7 +627,6 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                   {[
                     { id: 'all', label: 'All Categories' },
-                    { id: 'cricket_auction', label: 'Cricket Auctions' },
                     { id: 'sports', label: 'Sports' },
                     { id: 'cafe_meetup', label: 'Café Meetups' },
                     { id: 'gaming', label: 'Gaming' },

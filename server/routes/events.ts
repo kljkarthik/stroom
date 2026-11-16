@@ -133,28 +133,19 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
 });
 
 // 4. POST Register for Event (Generates Authentic Digital Pass & Seat Code)
-router.post('/:id/register', optionalAuth, async (req: AuthRequest, res: Response) => {
+router.post('/:id/register', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const adapter = getDatabaseAdapter();
     const { id } = req.params;
-    const { role_type, seat_tier, attendee_name, email, phone, role } = req.body;
-    let userId = req.user?.id;
+    const { role_type, seat_tier, role } = req.body;
 
-    if (!userId) {
-      // Find or create user for this attendee
-      const attendeeEmail = email || `attendee_${Date.now()}@stroom.club`;
-      const existingUser = await adapter.queryOne<{ id: string }>('SELECT id FROM users WHERE email = ?', [attendeeEmail]);
-      if (!existingUser) {
-        const newId = 'usr_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-        const memberId = `STR-HYD-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-        await adapter.execute(`
-          INSERT INTO users (id, email, password_hash, full_name, phone, role, member_id, onboarding_status)
-          VALUES (?, ?, '', ?, ?, 'user', ?, 'NOT_STARTED')
-        `, [newId, attendeeEmail, attendee_name || 'STROOM Attendee', phone || '', memberId]);
-        userId = newId;
-      } else {
-        userId = existingUser.id;
-      }
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'Authentication required. Please sign in or create an account to register for this event.' });
+    }
+    const userId = req.user.id;
+
+    if (req.user.account_status === 'suspended') {
+      return res.status(403).json({ error: 'Your account is suspended. Please contact STROOM support.' });
     }
 
     const result = await adapter.transaction(async (tx) => {
@@ -186,7 +177,7 @@ router.post('/:id/register', optionalAuth, async (req: AuthRequest, res: Respons
       await tx.execute(`
         INSERT INTO event_registrations (id, event_id, user_id, pass_code, qr_token, seat_tier, role_type, checkin_status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed')
-      `, [regId, id, userId, passCode, qrToken, seat_tier || 'Table Seat', role || role_type || 'Bidder']);
+      `, [regId, id, userId, passCode, qrToken, seat_tier || 'Confirmed Pass', role || role_type || 'Participant']);
 
       // 5. Increment event booked seats
       await tx.execute('UPDATE events SET seats_booked = seats_booked + 1 WHERE id = ?', [id]);

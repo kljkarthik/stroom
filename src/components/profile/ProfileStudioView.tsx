@@ -8,6 +8,7 @@ import {
   MapPin,
   Lock,
   Eye,
+  EyeOff,
   CheckCircle2,
   AlertCircle,
   Save,
@@ -29,6 +30,7 @@ interface ProfileStudioViewProps {
   onTriggerQuiz?: () => void;
   onPreviewPublicProfile?: (memberId: string) => void;
   onBackToDashboard?: () => void;
+  onProfileUpdated?: () => void;
 }
 
 const OFFICIAL_INTERESTS = [
@@ -69,6 +71,7 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
   onTriggerQuiz,
   onPreviewPublicProfile,
   onBackToDashboard,
+  onProfileUpdated,
 }) => {
   const { user, refreshUser } = useAuth();
 
@@ -105,6 +108,9 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
   const [currentPassword, setCurrentPassword] = useState<string>('');
   const [newPassword, setNewPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState<boolean>(false);
+  const [showNewPassword, setShowNewPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
   const [passwordStatus, setPasswordStatus] = useState<{ success?: boolean; message?: string } | null>(null);
 
   // Submission status
@@ -112,6 +118,19 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [completionPct, setCompletionPct] = useState<number>(60);
+
+  const handleAvatarChange = async (url: string) => {
+    setAvatarUrl(url);
+    try {
+      await api.updateUserProfile({ avatar_url: url });
+      await refreshUser();
+      if (onProfileUpdated) onProfileUpdated();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      console.warn('Avatar auto-save note:', err);
+    }
+  };
 
   useEffect(() => {
     loadProfile();
@@ -181,6 +200,7 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
           setCompletionPct(res.completionPercentage);
         }
         await refreshUser();
+        if (onProfileUpdated) onProfileUpdated();
         setTimeout(() => setSaveSuccess(false), 3000);
       }
     } catch (err: any) {
@@ -309,7 +329,7 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => setAvatarUrl(url)}
+                        onClick={() => handleAvatarChange(url)}
                         className={`w-9 h-9 rounded-xl overflow-hidden border-2 transition-all ${
                           avatarUrl === url ? 'border-stroom-orange scale-105' : 'border-transparent hover:border-stroom-borderLight'
                         }`}
@@ -320,7 +340,7 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
                   </div>
                   <ImageUpload
                     value={avatarUrl}
-                    onChange={(url) => setAvatarUrl(url)}
+                    onChange={(url) => handleAvatarChange(url)}
                     folder="avatars"
                     aspectRatio="square"
                     maxSizeMB={5}
@@ -449,7 +469,7 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
             </div>
 
             <p className="text-xs text-stroom-charcoal/70">
-              Select what moves you. STROOM connects your choices directly to upcoming experiences, auctions, and community recommendations.
+              Select what moves you. STROOM connects your choices directly to upcoming experiences, events, and community recommendations.
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -639,32 +659,63 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
             <form onSubmit={handleChangePassword} className="space-y-3">
               <div>
                 <label className="text-[10px] font-bold text-stroom-charcoal block mb-0.5">Current Password</label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-xs"
-                />
+                <div className="relative">
+                  <input
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-xs outline-none focus:border-stroom-orange"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-2.5 top-2 text-stone-400 hover:text-stroom-orange"
+                    aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                  >
+                    {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="text-[10px] font-bold text-stroom-charcoal block mb-0.5">New Password</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-xs"
-                />
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-xs outline-none focus:border-stroom-orange"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-2.5 top-2 text-stone-400 hover:text-stroom-orange"
+                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  >
+                    {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-stroom-charcoal/70 mt-1">At least 6 characters.</p>
               </div>
 
               <div>
                 <label className="text-[10px] font-bold text-stroom-charcoal block mb-0.5">Confirm New Password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-xs"
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-xs outline-none focus:border-stroom-orange"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-2.5 top-2 text-stone-400 hover:text-stroom-orange"
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
 
               {passwordStatus && (

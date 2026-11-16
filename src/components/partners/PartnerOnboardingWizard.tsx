@@ -53,7 +53,7 @@ const COLLABORATION_INTERESTS = [
   'Host community events',
   'Café meetups',
   'Sports activities',
-  'Cricket auctions',
+  'Box cricket tournaments',
   'Gaming events',
   'Movie experiences',
   'Fitness activities',

@@ -28,18 +28,20 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+import { useAuth } from '../../context/AuthContext';
+
 interface DiscoverEventsPageProps {
   initialCategory?: string;
   initialCity?: string;
   onSelectEvent: (eventId: string) => void;
-  onGoToAuction?: () => void;
   onGoToCommunities?: () => void;
+  onOpenAuth?: (eventId?: string) => void;
 }
 
 // 10 Official STROOM Experience Categories
 const CATEGORIES = [
   { id: 'all', label: 'All Experiences', icon: Compass },
-  { id: 'cricket', label: 'Cricket Auctions', icon: Trophy, isFlagship: true },
+  { id: 'cricket', label: 'Box Cricket', icon: Trophy, isFlagship: true },
   { id: 'sports', label: 'Sports & Turf', icon: Activity },
   { id: 'gaming', label: 'Gaming & Esports', icon: Gamepad2 },
   { id: 'cafe', label: 'Café Meetups', icon: Coffee },
@@ -55,17 +57,20 @@ const CITIES = [
   { id: 'all', name: 'All Cities' },
   { id: 'city_hyd', name: 'Hyderabad' },
   { id: 'city_pune', name: 'Pune' },
-  { id: 'city_blr', name: 'Bangalore' },
-  { id: 'city_mum', name: 'Mumbai' },
+  { id: 'city_mum', name: 'Mumbai (Coming Soon)' },
+  { id: 'city_delhi', name: 'Delhi (Coming Soon)' },
+  { id: 'city_blr', name: 'Bangalore (Coming Soon)' },
+  { id: 'city_kolkata', name: 'Kolkata (Coming Soon)' },
 ];
 
 export const DiscoverEventsPage: React.FC<DiscoverEventsPageProps> = ({
   initialCategory = 'all',
   initialCity = 'all',
   onSelectEvent,
-  onGoToAuction,
   onGoToCommunities,
+  onOpenAuth,
 }) => {
+  const { isAuthenticated } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +124,12 @@ export const DiscoverEventsPage: React.FC<DiscoverEventsPageProps> = ({
   }, [searchQuery]);
 
   const handleOpenRegistration = (ev: Event) => {
+    if (!isAuthenticated) {
+      if (onOpenAuth) {
+        onOpenAuth(ev.id);
+      }
+      return;
+    }
     const eventDetails: EventDetails = {
       id: ev.id,
       title: ev.title,
@@ -157,21 +168,12 @@ export const DiscoverEventsPage: React.FC<DiscoverEventsPageProps> = ({
                 Find Your Next <span className="text-stroom-orange">Experience</span>.
               </h1>
               <p className="mt-2 text-stroom-charcoal/80 text-sm sm:text-base max-w-2xl font-medium">
-                Live cricket auctions, sporting showdowns, café mixers, and community gatherings across Hyderabad, Pune, Bangalore, and Mumbai.
+                Sporting showdowns, turf tournaments, café mixers, and community gatherings across Hyderabad, Pune, Bangalore, and Mumbai.
               </p>
             </div>
 
             {/* Quick Actions */}
             <div className="flex items-center gap-3">
-              {onGoToAuction && (
-                <button
-                  onClick={onGoToAuction}
-                  className="px-4 py-2.5 rounded-xl bg-stroom-black text-white hover:bg-stone-800 text-xs font-black shadow-md flex items-center gap-2 transition-all"
-                >
-                  <Trophy className="w-4 h-4 text-stroom-orange" />
-                  <span>Live Cricket Auction</span>
-                </button>
-              )}
               {onGoToCommunities && (
                 <button
                   onClick={onGoToCommunities}
@@ -272,7 +274,7 @@ export const DiscoverEventsPage: React.FC<DiscoverEventsPageProps> = ({
                 }`}
               >
                 <Flame className="w-3 h-3 text-stroom-orange" />
-                Flagship Auctions
+                Flagship Events
               </button>
               <button
                 onClick={() => setTimeframe('past')}

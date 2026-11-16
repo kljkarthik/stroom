@@ -11,7 +11,9 @@ import {
   AlertCircle,
   Building2,
   Trophy,
-  ArrowLeft
+  ArrowLeft,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 interface AuthViewProps {
@@ -20,10 +22,11 @@ interface AuthViewProps {
 }
 
 export const AuthView: React.FC<AuthViewProps> = ({ onBackToHome, intendedDestination }) => {
-  const { login, register, loginAsDemoUser } = useAuth();
+  const { login, register } = useAuth();
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [fullName, setFullName] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -74,70 +77,24 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToHome, intendedDestin
           <p className="text-xs text-stroom-charcoal/80 mt-2 font-medium">
             Meet New People. Discover Common Interests. Build Real Connections.
           </p>
-          {intendedDestination === 'partner' && (
-            <div className="mt-3 px-4 py-2 rounded-xl bg-stroom-cream border border-stroom-orange/40 text-stroom-deep text-xs font-bold inline-flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-stroom-orange" />
-              <span>Sign in to continue to the STROOM Partner Portal</span>
-            </div>
-          )}
         </div>
-
-        {/* Demo Fast-Login Cards (strictly gated for dev/demo environments) */}
-        {isDemoAuthEnabled && (
-          <div className="mb-6 space-y-2.5">
-            <p className="text-[10px] font-black text-stroom-charcoal/60 uppercase tracking-widest text-center">
-              One-Click Instant Testing Access
-            </p>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => loginAsDemoUser('user')}
-                className="p-2.5 rounded-2xl bg-white hover:bg-stroom-cream/60 border border-stroom-orange/30 text-left transition-all hover:scale-[1.02] shadow-sm group"
-              >
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-6 h-6 rounded-lg bg-stroom-cream flex items-center justify-center text-stroom-deep group-hover:bg-stroom-orange group-hover:text-white transition-colors shrink-0">
-                    <User className="w-3.5 h-3.5" />
-                  </div>
-                  <span className="text-[11px] font-extrabold text-stroom-black truncate">Participant</span>
-                </div>
-                <p className="text-[10px] text-stroom-charcoal/70 leading-tight">
-                  Member & Bidder
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => loginAsDemoUser('partner')}
-                className="p-2.5 rounded-2xl bg-white hover:bg-stroom-cream/60 border border-stroom-orange/30 text-left transition-all hover:scale-[1.02] shadow-sm group"
-              >
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-6 h-6 rounded-lg bg-stroom-cream flex items-center justify-center text-stroom-deep group-hover:bg-stroom-orange group-hover:text-white transition-colors shrink-0">
-                    <Building2 className="w-3.5 h-3.5" />
-                  </div>
-                  <span className="text-[11px] font-extrabold text-stroom-black truncate">Partner</span>
-                </div>
-                <p className="text-[10px] text-stroom-charcoal/70 leading-tight">
-                  Venue & Café Host
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => loginAsDemoUser('admin')}
-                className="p-2.5 rounded-2xl bg-white hover:bg-stroom-cream/60 border border-stroom-orange/30 text-left transition-all hover:scale-[1.02] shadow-sm group"
-              >
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-6 h-6 rounded-lg bg-stroom-cream flex items-center justify-center text-stroom-deep group-hover:bg-stroom-orange group-hover:text-white transition-colors shrink-0">
-                    <Shield className="w-3.5 h-3.5" />
-                  </div>
-                  <span className="text-[11px] font-extrabold text-stroom-black truncate">Admin</span>
-                </div>
-                <p className="text-[10px] text-stroom-charcoal/70 leading-tight">
-                  Operations & CMS
-                </p>
-              </button>
-            </div>
+        {/* Form Header info */}
+        {intendedDestination === 'partner' && (
+          <div className="mb-4 px-4 py-2 rounded-xl bg-stroom-cream border border-stroom-orange/40 text-stroom-deep text-xs font-bold flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-stroom-orange" />
+            <span>Sign in to continue to the STROOM Partner Portal</span>
+          </div>
+        )}
+        {intendedDestination === 'event_details' && (
+          <div className="mb-4 px-4 py-2 rounded-xl bg-stroom-cream border border-stroom-orange/40 text-stroom-deep text-xs font-bold flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-stroom-orange" />
+            <span>Sign in or create an account to complete your event registration and claim your digital pass</span>
+          </div>
+        )}
+        {intendedDestination === 'participant' && (
+          <div className="mb-4 px-4 py-2 rounded-xl bg-stroom-cream border border-stroom-orange/40 text-stroom-deep text-xs font-bold flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-stroom-orange" />
+            <span>Sign in to view your profile, digital passes, and community activity</span>
           </div>
         )}
 
@@ -210,14 +167,23 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToHome, intendedDestin
               <div className="relative">
                 <Lock className="w-4 h-4 text-stroom-orange absolute left-3 top-3.5" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight focus:border-stroom-orange focus:ring-2 focus:ring-stroom-orange/20 text-sm font-semibold text-stroom-black outline-none transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-stroom-ivory border border-stroom-borderLight focus:border-stroom-orange focus:ring-2 focus:ring-stroom-orange/20 text-sm font-semibold text-stroom-black outline-none transition-all"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-stone-400 hover:text-stroom-orange transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
+              <p className="text-[11px] text-stroom-charcoal/70 mt-1">At least 6 characters.</p>
             </div>
 
             <button

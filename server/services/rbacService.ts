@@ -11,8 +11,6 @@ export type AdminPermission =
   | 'members.manage'
   | 'roles.assign'
   | 'communities.manage'
-  | 'auctions.view'
-  | 'auctions.manage'
   | 'partners.verify'
   | 'venues.manage'
   | 'checkin.access'
@@ -40,8 +38,6 @@ export const ALL_PERMISSIONS: AdminPermission[] = [
   'members.manage',
   'roles.assign',
   'communities.manage',
-  'auctions.view',
-  'auctions.manage',
   'partners.verify',
   'venues.manage',
   'checkin.access',
@@ -73,20 +69,6 @@ export const ROLE_PERMISSIONS: Record<string, AdminPermission[]> = {
     'venues.manage',
     'checkin.access',
     'notifications.manage',
-    'analytics.view',
-  ],
-  auctioneer: [
-    'overview.view',
-    'auctions.view',
-    'auctions.manage',
-    'events.view',
-    'analytics.view',
-  ],
-  auction_manager: [
-    'overview.view',
-    'auctions.view',
-    'auctions.manage',
-    'events.view',
     'analytics.view',
   ],
   community_manager: [
@@ -127,8 +109,6 @@ export const ADMIN_STAFF_ROLES = [
   'admin',
   'platform_admin',
   'event_manager',
-  'auctioneer',
-  'auction_manager',
   'community_manager',
   'partner_manager',
   'checkin_staff',
@@ -160,7 +140,6 @@ export function getAllowedSidebarSections(role?: string): string[] {
   if (perms.has('events.view') || perms.has('cities.manage')) sections.push('events');
   if (perms.has('members.view') || perms.has('members.manage') || perms.has('roles.assign')) sections.push('members');
   if (perms.has('communities.manage')) sections.push('communities');
-  if (perms.has('auctions.view') || perms.has('auctions.manage')) sections.push('auctions');
   if (perms.has('partners.verify') || perms.has('campaigns.approve')) sections.push('partners');
   if (perms.has('venues.manage')) sections.push('venues');
   if (perms.has('checkin.access')) sections.push('checkin');

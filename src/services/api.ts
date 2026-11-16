@@ -310,163 +310,6 @@ export const api = {
     });
   },
 
-  // STROOM Independent Auction Engine
-  async getAuctions(params: { status?: string; format?: string; city?: string; search?: string } = {}) {
-    const q = new URLSearchParams();
-    if (params.status) q.set('status', params.status);
-    if (params.format) q.set('format', params.format);
-    if (params.city) q.set('city', params.city);
-    if (params.search) q.set('search', params.search);
-    const queryStr = q.toString() ? `?${q.toString()}` : '';
-    return request<{ auctions: any[]; rooms: any[] }>(`/auctions${queryStr}`);
-  },
-
-  async getAuction(id: string) {
-    return request<{
-      auction: any;
-      teams: any[];
-      players: any[];
-      currentPlayer: any;
-      currentLot: any;
-      recentBids: any[];
-      rulesConfig?: any;
-      userRegistration?: any;
-      userTeam?: any;
-      activeListeners?: number;
-    }>(`/auctions/${id}`);
-  },
-
-  async getMyAuctionRegistrations() {
-    return request<{ success: boolean; registrations: any[] }>('/auctions/my/registrations');
-  },
-
-  async registerForAuction(auctionId: string, data: { role_type?: 'bidder' | 'team_owner' | 'viewer'; team_id?: string } = {}) {
-    return request<{ success: boolean; message: string; registration: any }>(`/auctions/${auctionId}/register`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  async placeAuctionBid(auctionId: string, data: { team_id: string; player_id: string; increment?: number; custom_amount?: number; amount?: number }) {
-    return request<{ success: boolean; message: string; result: any; currentBid: number; highestBidderTeamId: string }>(`/auctions/${auctionId}/bid`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  async gavelStrike(auctionId: string, data: { player_id?: string; action: 'SOLD' | 'UNSOLD' }) {
-    return request<{ success: boolean; message: string; result: any; action: string; player: any }>(`/auctions/${auctionId}/gavel`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  async nextAuctionLot(auctionId: string, next_player_id?: string) {
-    return request<{ completed: boolean; player?: any }>(`/auctions/${auctionId}/next-lot`, {
-      method: 'POST',
-      body: JSON.stringify({ next_player_id }),
-    });
-  },
-
-  async skipAuctionLot(auctionId: string, player_id?: string) {
-    return request<{ success: boolean; message: string }>(`/auctions/${auctionId}/skip-lot`, {
-      method: 'POST',
-      body: JSON.stringify({ player_id }),
-    });
-  },
-
-  async reopenAuctionLot(auctionId: string, player_id: string) {
-    return request<{ success: boolean; message: string; player: any }>(`/auctions/${auctionId}/reopen-lot`, {
-      method: 'POST',
-      body: JSON.stringify({ player_id }),
-    });
-  },
-
-  async selectAuctionLot(auctionId: string, player_id: string) {
-    return request<{ success: boolean; message: string; player: any }>(`/auctions/${auctionId}/select-lot`, {
-      method: 'POST',
-      body: JSON.stringify({ player_id }),
-    });
-  },
-
-  async setAuctionStatus(auctionId: string, status: 'LIVE' | 'PAUSED' | 'COMPLETED' | 'SCHEDULED') {
-    return request<{ message: string }>(`/auctions/${auctionId}/status`, {
-      method: 'POST',
-      body: JSON.stringify({ status }),
-    });
-  },
-
-  async getAuctionReport(auctionId: string) {
-    return request<{ report: any }>(`/auctions/${auctionId}/report`);
-  },
-
-  async getAuctionResults(auctionId: string) {
-    return request<{ report: any }>(`/auctions/${auctionId}/results`);
-  },
-
-  async createAuction(data: any) {
-    return request<{ success: boolean; auction: any }>('/auctions', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  async updateAuction(auctionId: string, data: any) {
-    return request<{ success: boolean; auction: any }>(`/auctions/${auctionId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  },
-
-  // Team Management
-  async createAuctionTeam(auctionId: string, data: any) {
-    return request<{ success: boolean; team: any }>(`/auctions/${auctionId}/teams`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  async updateAuctionTeam(auctionId: string, teamId: string, data: any) {
-    return request<{ success: boolean; team: any }>(`/auctions/${auctionId}/teams/${teamId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  },
-
-  async deleteAuctionTeam(auctionId: string, teamId: string) {
-    return request<{ success: boolean; message: string }>(`/auctions/${auctionId}/teams/${teamId}`, {
-      method: 'DELETE',
-    });
-  },
-
-  // Player Management
-  async createAuctionPlayer(auctionId: string, data: any) {
-    return request<{ success: boolean; player: any }>(`/auctions/${auctionId}/players`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  async updateAuctionPlayer(auctionId: string, playerId: string, data: any) {
-    return request<{ success: boolean; player: any }>(`/auctions/${auctionId}/players/${playerId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  },
-
-  async deleteAuctionPlayer(auctionId: string, playerId: string) {
-    return request<{ success: boolean; message: string }>(`/auctions/${auctionId}/players/${playerId}`, {
-      method: 'DELETE',
-    });
-  },
-
-  async batchImportAuctionPlayers(auctionId: string, players: any[]) {
-    return request<{ success: boolean; message: string }>(`/auctions/${auctionId}/players/batch`, {
-      method: 'POST',
-      body: JSON.stringify({ players }),
-    });
-  },
-
   // STROOM Digital Passes & Check-in
   async getMyPasses() {
     return request<{ passes: any[] }>('/passes/my-passes');
@@ -999,7 +842,6 @@ export const api = {
         checkedInCount: number;
         attendanceStamps: number;
         paymentsCount: number | null;
-        auctionsCount: number;
         collaborationsCount: number;
         venueBookingsCount: number;
         hasProtectedDependencies: boolean;
@@ -1097,15 +939,6 @@ export const api = {
 
   async getAdminCommunityMembers(id: string) {
     return request<{ success: boolean; members: any[] }>(`/admin/communities/${id}/members`);
-  },
-
-  // Auctions Admin
-  async getAdminAuctions() {
-    return request<{ success: boolean; auctions: any[]; recentBids: any[] }>('/admin/auctions');
-  },
-
-  async createAdminAuction(data: any) {
-    return request<{ success: boolean; auction: any }>('/admin/auctions', { method: 'POST', body: JSON.stringify(data) });
   },
 
   // Venues Admin

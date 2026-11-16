@@ -113,9 +113,7 @@ router.post('/check-in', requireAuth, requirePermission('checkin.access'), async
     }
 
     const stampId = 'stamp_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-    const stampIcon = pass.event_category?.includes('auction')
-      ? 'Trophy'
-      : pass.event_category?.includes('sport')
+    const stampIcon = pass.event_category?.includes('sport')
       ? 'Activity'
       : pass.event_category?.includes('cafe')
       ? 'Coffee'

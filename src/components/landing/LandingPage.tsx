@@ -4,11 +4,9 @@ import { RegistrationModal, EventDetails } from '../modals/RegistrationModal';
 import { PartnerProposalModal } from '../modals/PartnerProposalModal';
 import { HostEventModal } from '../modals/HostEventModal';
 import { api } from '../../services/api';
-import { Community } from '../../types';
 import {
   Users,
   Target,
-  Handshake,
   Heart,
   Calendar,
   MapPin,
@@ -42,7 +40,6 @@ import {
 } from 'lucide-react';
 
 interface LandingPageProps {
-  onGoToAuction: () => void;
   onGoToAuth: () => void;
   onGoToParticipant: () => void;
   onGoToDiscover?: (category?: string) => void;
@@ -55,12 +52,12 @@ interface LandingPageProps {
   onGoToFaqs?: () => void;
 }
 
-// 10 Official Experience Categories with Icons & Descriptions
+// 10 Official Experience Categories
 const EXPERIENCE_CATEGORIES = [
   {
     id: 'sports',
     title: 'Cricket & Sports',
-    desc: 'Live franchise player auctions, box cricket, and 5-a-side floodlit turf leagues where teammates become friends.',
+    desc: 'Box cricket leagues, football blitzes, and floodlit turf games where teammates become friends.',
     icon: Trophy,
     highlight: 'Flagship Event',
     image: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
@@ -68,7 +65,7 @@ const EXPERIENCE_CATEGORIES = [
   },
   {
     id: 'gaming',
-    title: 'Gaming',
+    title: 'Gaming & Board Games',
     desc: 'Board game battle nights, Catan tournaments, and FIFA console face-offs at premium city lounges.',
     icon: Gamepad2,
     highlight: 'Trending',
@@ -87,7 +84,7 @@ const EXPERIENCE_CATEGORIES = [
   {
     id: 'movies',
     title: 'Movie Screenings',
-    desc: 'Outdoor projector cinema nights, indie festival shorts, and IPL finals watch-alongs under open skies.',
+    desc: 'Outdoor projector cinema nights, indie festival shorts, and sports watch-alongs under open skies.',
     icon: Film,
     highlight: 'Community Night',
     image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&auto=format&fit=crop&q=80',
@@ -152,27 +149,105 @@ const EXPERIENCE_CATEGORIES = [
 // Verified Community Stories (Genuine member perspectives)
 const COMMUNITY_STORIES = [
   {
-    quote: "I moved to Hyderabad knowing zero people in Gachibowli. Registered for the STROOM cricket auction on a whim. Today, my franchise teammates are my flatmates and best friends.",
+    quote: "I moved to Hyderabad knowing zero people in Gachibowli. Registered for a STROOM box cricket match on a whim. Today, my teammates are my flatmates and best friends.",
     author: "Karan Mehra",
     role: "Product Designer • Hyderabad",
-    tag: "Auction Participant #42",
+    tag: "Cricket & Sports Member",
+    chapter: "Hyderabad Chapter",
   },
   {
-    quote: "The live bidding stage in Pune was more fun than any corporate mixer or dating app. The energy was electric, and everyone was genuinely open to meeting new people.",
+    quote: "The turf match and coffee mixer in Pune was more fun than any corporate mixer or dating app. The energy was electric, and everyone was genuinely open to meeting new people.",
     author: "Sneha Sen",
     role: "Marketing Strategist • Pune",
-    tag: "Franchise Bidder",
+    tag: "Social Mixer Member",
+    chapter: "Pune Chapter",
   },
   {
-    quote: "STROOM captures the rare magic of modern cities — giving strangers a safe, exciting reason to laugh, compete, and share stories together.",
+    quote: "STROOM captures the rare magic of modern cities — giving strangers a safe, exciting reason to laugh, compete, and share stories together in real life.",
     author: "Rishabh Goel",
     role: "Software Architect • Bangalore",
-    tag: "Weekend League Member",
+    tag: "Tech & Networking Circle",
+    chapter: "Bangalore Chapter",
+  },
+];
+
+// 6 Official Launch Cities
+const LAUNCH_CITIES = [
+  {
+    id: 'city_hyd',
+    name: 'Hyderabad',
+    state: 'Telangana',
+    status: 'open',
+    statusLabel: 'Open • Live Experiences',
+    badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+    description: 'Flagship Launch Hub. Active cricket turfs, artisanal café mixers, and gaming nights across Jubilee Hills & Gachibowli.',
+    areas: ['Jubilee Hills', 'Gachibowli', 'Kondapur', 'Hitec City'],
+    image: 'https://images.unsplash.com/photo-1588416936097-41850ab3d86d?w=800&auto=format&fit=crop&q=80',
+    isOpen: true,
+  },
+  {
+    id: 'city_pune',
+    name: 'Pune',
+    state: 'Maharashtra',
+    status: 'open',
+    statusLabel: 'Open • Live Experiences',
+    badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300',
+    description: 'Premier Expansion Hub. Weekend turf tournaments, open-air cafe meetups, and cycling squads in FC Road & Koregaon Park.',
+    areas: ['Koregaon Park', 'FC Road', 'Baner', 'Viman Nagar'],
+    image: 'https://images.unsplash.com/photo-1595658658481-d53d3f999875?w=800&auto=format&fit=crop&q=80',
+    isOpen: true,
+  },
+  {
+    id: 'city_mum',
+    name: 'Mumbai',
+    state: 'Maharashtra',
+    status: 'coming_soon',
+    statusLabel: 'Coming Soon • Waitlist Open',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-300',
+    description: 'Coastal Arena & Social Mixer Hub. Sunset runs, turf showdowns, and acoustic cafe evenings across Bandra & BKC.',
+    areas: ['Bandra West', 'BKC', 'Juhu', 'Lower Parel'],
+    image: 'https://images.unsplash.com/photo-1570168007204-dfb528c6958f?w=800&auto=format&fit=crop&q=80',
+    isOpen: false,
+  },
+  {
+    id: 'city_delhi',
+    name: 'Delhi',
+    state: 'Delhi NCR',
+    status: 'coming_soon',
+    statusLabel: 'Coming Soon • Waitlist Open',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-300',
+    description: 'Capital Social Hub. Weekend box cricket leagues, cultural walks, and founders coffee meetups across Hauz Khas & CP.',
+    areas: ['Hauz Khas', 'Connaught Place', 'South Extension', 'Cyber Hub'],
+    image: 'https://images.unsplash.com/photo-1587474260584-136574528ed5?w=800&auto=format&fit=crop&q=80',
+    isOpen: false,
+  },
+  {
+    id: 'city_blr',
+    name: 'Bangalore',
+    state: 'Karnataka',
+    status: 'coming_soon',
+    statusLabel: 'Coming Soon • Waitlist Open',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-300',
+    description: 'Tech & Social Circle Hub. Sunset cycling trails, board game showdowns, and rooftop coffee gatherings across Indiranagar.',
+    areas: ['Indiranagar', 'Koramangala', 'HSR Layout', 'Whitefield'],
+    image: 'https://images.unsplash.com/photo-1596176530529-78163a4f7af2?w=800&auto=format&fit=crop&q=80',
+    isOpen: false,
+  },
+  {
+    id: 'city_kolkata',
+    name: 'Kolkata',
+    state: 'West Bengal',
+    status: 'coming_soon',
+    statusLabel: 'Coming Soon • Waitlist Open',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-300',
+    description: 'Cultural & Meetup Hub. Evening chai circles, heritage photo walks, and friendly neighborhood turf sports across Park Street.',
+    areas: ['Park Street', 'Salt Lake', 'New Town', 'Ballygunge'],
+    image: 'https://images.unsplash.com/photo-1558431382-27e303142255?w=800&auto=format&fit=crop&q=80',
+    isOpen: false,
   },
 ];
 
 export const LandingPage: React.FC<LandingPageProps> = ({
-  onGoToAuction,
   onGoToAuth,
   onGoToParticipant,
   onGoToDiscover,
@@ -194,10 +269,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   // Real backend data states
   const [backendEvents, setBackendEvents] = useState<any[]>([]);
-  const [featuredCommunities, setFeaturedCommunities] = useState<Community[]>([]);
   const [selectedCityId, setSelectedCityId] = useState<string>('all');
   const [isLoadingEvents, setIsLoadingEvents] = useState<boolean>(true);
-  const [isLoadingCommunities, setIsLoadingCommunities] = useState<boolean>(true);
 
   // Load verified events from database
   const loadEvents = async () => {
@@ -215,29 +288,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     }
   };
 
-  // Load verified communities from database
-  const loadCommunities = async () => {
-    setIsLoadingCommunities(true);
-    try {
-      const res = await api.getCommunities();
-      if (res && Array.isArray(res.communities)) {
-        // Prioritize Hyderabad and Pune
-        setFeaturedCommunities(res.communities.slice(0, 3));
-      }
-    } catch (err) {
-      console.warn('Could not load communities from database:', err);
-    } finally {
-      setIsLoadingCommunities(false);
-    }
-  };
-
   useEffect(() => {
     loadEvents();
   }, [selectedCityId]);
-
-  useEffect(() => {
-    loadCommunities();
-  }, []);
 
   const handleRegisterEvent = (event: EventDetails) => {
     setSelectedEvent(event);
@@ -258,7 +311,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       time: ev.event_time,
       venue: ev.venue_name || 'STROOM Partner Venue',
       seatsLeft: seatsRemaining,
-      category: ev.category || 'Cricket Auction',
+      category: ev.category || 'Sports & Social',
       entryFee: ev.entry_fee || 'Free Entry',
       image_url: ev.image_url,
       description: ev.description,
@@ -269,7 +322,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     <div className="min-h-screen bg-stroom-ivory text-stroom-black selection:bg-stroom-orange selection:text-white">
       
       {/* ==================================================
-          SECTION 1 — HERO SECTION
+          1. HERO SECTION — DISCOVER REAL-WORLD EXPERIENCES
           ================================================== */}
       <section className="relative overflow-hidden pt-8 pb-16 sm:pb-24 border-b border-stroom-borderLight">
         {/* Ambient Top Contours */}
@@ -299,12 +352,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               {/* Supporting Text */}
               <p className="text-base sm:text-lg text-stroom-charcoal/80 max-w-xl font-medium leading-relaxed">
-                Discover experiences, meet like-minded people, and turn shared interests into unforgettable real-world connections.
+                Discover curated real-world experiences, meet like-minded people in your city, and turn shared passions into lifelong friendships.
               </p>
 
-              {/* Call to Actions */}
+              {/* Call to Actions (Primary: Explore Experiences, Secondary: Discover Communities) */}
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4 pt-2">
                 <button
+                  type="button"
                   onClick={() => onGoToDiscover?.()}
                   className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-extrabold text-sm sm:text-base shadow-brand hover:brightness-105 active:scale-[0.99] transition-all flex items-center gap-2"
                 >
@@ -314,61 +368,54 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </button>
 
                 <button
-                  onClick={onGoToAuth}
+                  type="button"
+                  onClick={() => onGoToCommunities ? onGoToCommunities() : onGoToDiscover?.()}
                   className="px-6 py-3.5 rounded-2xl bg-white hover:bg-stroom-cream border-2 border-stroom-orange/30 text-stroom-black font-extrabold text-sm sm:text-base shadow-sm transition-all flex items-center gap-2"
                 >
                   <Users className="w-5 h-5 text-stroom-orange" />
-                  <span>Join STROOM</span>
-                </button>
-
-                <button
-                  onClick={onGoToAuction}
-                  className="px-5 py-3.5 rounded-2xl bg-stroom-charcoal hover:bg-stroom-black text-white font-extrabold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-2"
-                >
-                  <Trophy className="w-4 h-4 text-stroom-gold" />
-                  <span>Live Cricket Auction</span>
+                  <span>Discover Communities</span>
                 </button>
               </div>
 
               {/* Trust Badges */}
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-5 pt-3 text-xs font-bold text-stroom-charcoal/70">
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-stroom-orange" /> Launch City #1: Hyderabad
+                  <CheckCircle2 className="w-4 h-4 text-stroom-orange" /> Hyderabad Chapter Live
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-stroom-orange" /> Launch City #2: Pune
+                  <CheckCircle2 className="w-4 h-4 text-stroom-orange" /> Pune Chapter Live
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-stroom-orange" /> 100% Real Strangers
+                  <CheckCircle2 className="w-4 h-4 text-stroom-orange" /> 100% Real Community Gatherings
                 </span>
               </div>
             </div>
 
-            {/* Right Hero Visual: Authentic Community Gathering from Poster */}
+            {/* Right Hero Visual: Authentic Community Gathering Poster */}
             <div className="lg:col-span-5 relative">
               <div className="relative mx-auto max-w-md lg:max-w-none">
                 
-                {/* Decorative Glow */}
+                {/* Decorative Ambient Glow */}
                 <div className="absolute -inset-4 bg-gradient-to-tr from-stroom-orange/30 to-stroom-gold/20 rounded-4xl filter blur-2xl opacity-70" />
 
                 {/* Main Framed Poster Image */}
                 <div className="relative rounded-3xl overflow-hidden border-4 border-white shadow-2xl bg-stroom-cream">
                   <img
                     src="/brand/stroom-community-hero.jpg"
-                    alt="STROOM Community Friends Meetup at Sunset"
+                    alt="STROOM Community Meetup & Social Gathering"
                     className="w-full h-80 sm:h-96 object-cover hover:scale-105 transition-transform duration-700"
                   />
                   
                   {/* Floating Live Badge */}
                   <div className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-stroom-black/85 backdrop-blur-md text-white text-xs font-extrabold flex items-center gap-2 border border-stroom-orange/40 shadow">
                     <span className="w-2 h-2 rounded-full bg-stroom-orange animate-ping" />
-                    <span>Hyderabad Arena Live</span>
+                    <span>Hyderabad & Pune Active</span>
                   </div>
 
                   {/* Gradient Overlay at bottom */}
                   <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-stroom-black/90 via-stroom-black/60 to-transparent text-white">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-stroom-orange">
-                      Real Strangers • Real Connections
+                      Real Strangers • Genuine Connections
                     </p>
                     <p className="text-sm font-extrabold mt-0.5">
                       "Walk in alone. Walk out with a squad for life."
@@ -376,14 +423,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                 </div>
 
-                {/* Floating Stat Badge */}
+                {/* Floating Experience Badge */}
                 <div className="absolute -bottom-4 -left-4 p-3.5 rounded-2xl bg-white border border-stroom-orange/20 shadow-xl hidden sm:flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-stroom-cream flex items-center justify-center text-stroom-deep font-black">
-                    <Trophy className="w-5 h-5 text-stroom-orange" />
+                    <Sparkles className="w-5 h-5 text-stroom-orange" />
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase font-bold text-stroom-charcoal/60">Live Bidding Arena</p>
-                    <p className="text-xs font-extrabold text-stroom-black">5 Franchise Tables Active</p>
+                    <p className="text-[10px] uppercase font-bold text-stroom-charcoal/60">Community Experiences</p>
+                    <p className="text-xs font-extrabold text-stroom-black">10+ Passion Categories Live</p>
                   </div>
                 </div>
 
@@ -395,140 +442,89 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ==================================================
-          SECTION 2 — WHAT IS STROOM?
+          2. WHAT IS STROOM? (The 3 Real-World Pillars)
           ================================================== */}
       <section className="py-16 sm:py-20 bg-gradient-to-b from-stroom-cream/60 via-stroom-ivory to-stroom-cream/40 border-b border-stroom-borderLight">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <span className="text-xs font-black uppercase tracking-widest text-stroom-deep px-3 py-1 rounded-full bg-stroom-orange/10 border border-stroom-orange/20">
-              Our Core Philosophy
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <span className="text-xs font-black uppercase tracking-widest text-stroom-deep">
+              The Real-World Platform
             </span>
-            <h2 className="text-3xl sm:text-4xl font-black text-stroom-black mt-3 font-display">
-              What is STROOM?
+            <h2 className="text-3xl sm:text-4xl font-black text-stroom-black mt-2 font-display">
+              Real Experiences. Genuine Connections.
             </h2>
-            <p className="text-sm sm:text-base text-stroom-charcoal/80 mt-2 font-semibold">
-              STROOM is a community platform that brings people together through shared interests, activities, and real-world experiences.
+            <p className="text-sm sm:text-base text-stroom-charcoal/80 mt-2 font-medium">
+              We replace endless swiping and awkward small talk with engaging, structured offline activities where real chemistry happens naturally.
             </p>
           </div>
 
-          {/* 4 Pillars Matching Official Brand Poster */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            <div className="p-6 rounded-3xl bg-white border border-stroom-borderLight shadow-xs hover:shadow-brand transition-all hover:-translate-y-1 group">
-              <div className="w-14 h-14 rounded-2xl bg-stroom-cream group-hover:bg-stroom-orange flex items-center justify-center text-stroom-deep group-hover:text-white transition-colors mb-4">
-                <Users className="w-7 h-7" />
-              </div>
-              <h3 className="text-lg font-black text-stroom-black font-display">
-                Discover People
-              </h3>
-              <p className="text-xs sm:text-sm text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Connect with vibrant people outside your usual daily circle who are equally excited to meet new friends in the city.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-white border border-stroom-borderLight shadow-xs hover:shadow-brand transition-all hover:-translate-y-1 group">
-              <div className="w-14 h-14 rounded-2xl bg-stroom-cream group-hover:bg-stroom-orange flex items-center justify-center text-stroom-deep group-hover:text-white transition-colors mb-4">
-                <Target className="w-7 h-7" />
-              </div>
-              <h3 className="text-lg font-black text-stroom-black font-display">
-                Explore Interests
-              </h3>
-              <p className="text-xs sm:text-sm text-stroom-charcoal/70 mt-2 leading-relaxed">
-                From live cricket auctions and strategy gaming to specialty coffee cupping, find clubs focused on what you genuinely love.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-white border border-stroom-borderLight shadow-xs hover:shadow-brand transition-all hover:-translate-y-1 group">
-              <div className="w-14 h-14 rounded-2xl bg-stroom-cream group-hover:bg-stroom-orange flex items-center justify-center text-stroom-deep group-hover:text-white transition-colors mb-4">
-                <Handshake className="w-7 h-7" />
-              </div>
-              <h3 className="text-lg font-black text-stroom-black font-display">
-                Join Experiences
-              </h3>
-              <p className="text-xs sm:text-sm text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Step into structured, high-energy meetups. No awkward silences — activities give everyone a natural, fun role from minute one.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-white border border-stroom-borderLight shadow-xs hover:shadow-brand transition-all hover:-translate-y-1 group">
-              <div className="w-14 h-14 rounded-2xl bg-stroom-cream group-hover:bg-stroom-orange flex items-center justify-center text-stroom-deep group-hover:text-white transition-colors mb-4">
-                <Heart className="w-7 h-7" />
-              </div>
-              <h3 className="text-lg font-black text-stroom-black font-display">
-                Build Connections
-              </h3>
-              <p className="text-xs sm:text-sm text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Turn memorable events into lasting squad friendships, ongoing chat groups, and shared stories for tomorrow.
-              </p>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* ==================================================
-          SECTION 3 — DISCOVER EXPERIENCES (10 Categories)
-          ================================================== */}
-      <section className="py-16 sm:py-20 border-b border-stroom-borderLight">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-12">
-            <div>
-              <span className="text-xs font-black uppercase tracking-widest text-stroom-orange">
-                Real-World Catalogue
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-black text-stroom-black mt-2 font-display">
-                Discover Experiences
-              </h2>
-            </div>
-            <p className="text-sm text-stroom-charcoal/80 max-w-md mt-2 md:mt-0 font-medium">
-              Curated social formats engineered to make joining easy, engaging, and unforgettable.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {EXPERIENCE_CATEGORIES.map((cat) => {
-              const Icon = cat.icon;
-              return (
-                <div
-                  key={cat.id}
-                  onClick={() => onGoToDiscover?.(cat.id)}
-                  className="p-5 rounded-3xl bg-white border border-stroom-borderLight hover:border-stroom-orange hover:shadow-brand transition-all duration-300 flex flex-col justify-between group cursor-pointer"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-stroom-cream text-stroom-deep group-hover:bg-stroom-orange group-hover:text-white flex items-center justify-center transition-colors">
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-stroom-cream text-stroom-charcoal">
-                        {cat.highlight}
-                      </span>
-                    </div>
-
-                    <h4 className="text-base font-black text-stroom-black group-hover:text-stroom-orange transition-colors font-display">
-                      {cat.title}
-                    </h4>
-
-                    <p className="text-xs text-stroom-charcoal/70 mt-1.5 leading-relaxed line-clamp-3">
-                      {cat.desc}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-stroom-cream flex items-center justify-between text-xs font-black text-stroom-deep group-hover:text-stroom-orange">
-                    <span>Explore</span>
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </div>
+            {/* Pillar 1 */}
+            <div className="p-8 rounded-3xl bg-white border border-stroom-borderLight shadow-xs hover:border-stroom-orange/40 transition-all flex flex-col justify-between group">
+              <div>
+                <div className="w-14 h-14 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                  <Compass className="w-7 h-7 text-stroom-orange" />
                 </div>
-              );
-            })}
+                <h3 className="text-xl font-black text-stroom-black font-display">
+                  1. Real-World Activities
+                </h3>
+                <p className="text-xs sm:text-sm text-stroom-charcoal/80 mt-3 leading-relaxed">
+                  Box cricket under floodlights, artisanal café mixers, board game tournaments, and outdoor cycling trails. You connect over things you already love doing.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-stroom-cream flex items-center gap-2 text-xs font-extrabold text-stroom-deep">
+                <span>10 Curated Categories</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </div>
+            </div>
+
+            {/* Pillar 2 */}
+            <div className="p-8 rounded-3xl bg-white border border-stroom-borderLight shadow-xs hover:border-stroom-orange/40 transition-all flex flex-col justify-between group">
+              <div>
+                <div className="w-14 h-14 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                  <Users className="w-7 h-7 text-stroom-orange" />
+                </div>
+                <h3 className="text-xl font-black text-stroom-black font-display">
+                  2. Welcoming Strangers
+                </h3>
+                <p className="text-xs sm:text-sm text-stroom-charcoal/80 mt-3 leading-relaxed">
+                  Every attendee shows up solo or with friends specifically to expand their circle. Our certified hosts facilitate introductions so there's zero awkwardness.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-stroom-cream flex items-center gap-2 text-xs font-extrabold text-stroom-deep">
+                <span>Inclusive Community</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </div>
+            </div>
+
+            {/* Pillar 3 */}
+            <div className="p-8 rounded-3xl bg-white border border-stroom-borderLight shadow-xs hover:border-stroom-orange/40 transition-all flex flex-col justify-between group">
+              <div>
+                <div className="w-14 h-14 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                  <Shield className="w-7 h-7 text-stroom-orange" />
+                </div>
+                <h3 className="text-xl font-black text-stroom-black font-display">
+                  3. Verified Partner Venues
+                </h3>
+                <p className="text-xs sm:text-sm text-stroom-charcoal/80 mt-3 leading-relaxed">
+                  All experiences take place in hand-selected, verified venues—from premium sports turfs to third-wave specialty roasters and gaming lounges.
+                </p>
+              </div>
+              <div className="mt-6 pt-4 border-t border-stroom-cream flex items-center gap-2 text-xs font-extrabold text-stroom-deep">
+                <span>Safe & Certified Spots</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </div>
+            </div>
+
           </div>
 
         </div>
       </section>
 
       {/* ==================================================
-          SECTION 4 — UPCOMING EVENTS (Dynamic from Backend)
+          3. EXPLORE EXPERIENCES (10 Categories + Dynamic Events)
           ================================================== */}
       <section className="py-16 sm:py-20 bg-stroom-cream/30 border-b border-stroom-borderLight">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -547,14 +543,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* City Selector & View All Events */}
             <div className="flex flex-wrap items-center gap-2 mt-4 md:mt-0">
               {[
-                { id: 'all', label: 'All Cities' },
+                { id: 'all', label: 'All Open Cities' },
                 { id: 'city_hyd', label: 'Hyderabad' },
                 { id: 'city_pune', label: 'Pune' },
-                { id: 'city_blr', label: 'Bangalore' },
-                { id: 'city_mum', label: 'Mumbai' },
               ].map((c) => (
                 <button
                   key={c.id}
+                  type="button"
                   onClick={() => setSelectedCityId(c.id)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
                     selectedCityId === c.id
@@ -567,6 +562,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               ))}
 
               <button
+                type="button"
                 onClick={() => onGoToDiscover?.()}
                 className="px-4 py-1.5 rounded-xl bg-stroom-charcoal text-white hover:bg-stroom-black text-xs font-black transition-all ml-1 flex items-center gap-1"
               >
@@ -586,7 +582,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {backendEvents.slice(0, 3).map((ev) => {
                 const details = mapBackendEventToDetails(ev);
-                const isFlagship = ev.is_flagship === 1 || ev.category === 'cricket_auction';
+                const isFlagship = ev.is_flagship === 1;
                 return (
                   <div
                     key={ev.id}
@@ -609,57 +605,68 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                           </span>
                           <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
                             isFlagship
-                              ? 'bg-stroom-orange text-white shadow-brand'
-                              : 'bg-white/90 backdrop-blur-md text-stroom-black'
+                              ? 'bg-gradient-to-r from-stroom-orange to-stroom-deep text-white shadow'
+                              : 'bg-white/90 text-stroom-black'
                           }`}>
-                            {ev.category?.replace(/_/g, ' ')}
+                            {isFlagship ? 'Flagship' : details.category}
                           </span>
                         </div>
 
-                        {/* Seats Left Overlay */}
-                        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 text-xs text-white font-bold">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                          <span>{details.seatsLeft} Seats Remaining</span>
+                        {/* Seats Remaining Pill */}
+                        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-white text-[11px] font-bold">
+                          <Ticket className="w-3.5 h-3.5 text-stroom-orange" />
+                          <span>{details.seatsLeft} spots open</span>
                         </div>
                       </div>
 
-                      {/* Card Body */}
+                      {/* Content */}
                       <div className="p-5">
-                        <h3 className="text-base font-black text-stroom-black leading-snug group-hover:text-stroom-deep transition-colors">
-                          {ev.title}
+                        <h3 className="text-base font-black text-stroom-black group-hover:text-stroom-deep transition-colors line-clamp-1 leading-snug">
+                          {details.title}
                         </h3>
+                        <p className="text-xs text-stroom-charcoal/70 mt-1 line-clamp-2 leading-relaxed">
+                          {details.description || 'Join fellow enthusiasts for an energetic community gathering.'}
+                        </p>
 
-                        <div className="mt-3 space-y-1.5 text-xs text-stroom-charcoal/80">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-3.5 h-3.5 text-stroom-orange shrink-0" />
-                            <span>{ev.event_date} • {ev.event_time}</span>
+                        <div className="mt-4 pt-3 border-t border-stroom-cream flex items-center justify-between text-xs text-stroom-charcoal/80 font-semibold">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-stroom-orange" />
+                            <span>{details.date}</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-3.5 h-3.5 text-stroom-orange shrink-0" />
-                            <span className="truncate">{ev.venue_name || 'STROOM Partner Venue'}</span>
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-stroom-orange" />
+                            <span>{details.time}</span>
                           </div>
+                        </div>
+
+                        <div className="mt-2 flex items-center gap-1.5 text-xs text-stroom-charcoal/70 truncate">
+                          <MapPin className="w-3.5 h-3.5 text-stroom-orange shrink-0" />
+                          <span className="truncate">{details.venue}</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Bottom Action Footer */}
+                    {/* Card Footer */}
                     <div className="p-5 pt-0 border-t border-stroom-cream mt-2 flex items-center justify-between">
-                      <span className="text-xs font-extrabold text-stroom-deep">
-                        {ev.entry_fee || 'Free Entry'}
-                      </span>
+                      <div>
+                        <span className="text-[10px] text-stroom-charcoal/60 uppercase font-black block">Access</span>
+                        <span className="text-sm font-black text-stroom-black">{details.entryFee}</span>
+                      </div>
 
                       <div className="flex items-center gap-2">
                         {onGoToEventDetails && (
                           <button
+                            type="button"
                             onClick={() => onGoToEventDetails(ev.id)}
-                            className="px-3 py-2 rounded-xl bg-stroom-cream hover:bg-stroom-orange hover:text-white text-stroom-black text-xs font-bold transition-all"
+                            className="px-3 py-2 rounded-xl bg-stroom-cream hover:bg-stroom-cream/80 text-stroom-black text-xs font-black transition-all"
                           >
                             Details
                           </button>
                         )}
                         <button
+                          type="button"
                           onClick={() => handleRegisterEvent(details)}
-                          className="px-4 py-2 rounded-xl bg-stroom-orange hover:bg-stroom-deep text-white text-xs font-black shadow-brand transition-all"
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white text-xs font-black shadow-brand hover:brightness-105 active:scale-95 transition-all"
                         >
                           Register
                         </button>
@@ -670,298 +677,83 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               })}
             </div>
           ) : (
-            /* Attractive Empty State Required by Prompt */
-            <div className="py-16 px-6 text-center bg-white rounded-3xl border border-stroom-borderLight max-w-xl mx-auto shadow-xs">
-              <div className="w-14 h-14 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mx-auto mb-3">
-                <Sparkles className="w-7 h-7 text-stroom-orange" />
-              </div>
-              <h3 className="text-lg font-black text-stroom-black font-display">
-                Something exciting is coming.
-              </h3>
-              <p className="text-xs text-stroom-charcoal/80 mt-1 max-w-md mx-auto">
-                Be the first to discover our next experience. Check all cities or sign up for priority notifications.
+            <div className="py-16 text-center bg-white rounded-3xl border border-stroom-borderLight p-8 max-w-lg mx-auto">
+              <Compass className="w-10 h-10 text-stroom-orange/60 mx-auto mb-3" />
+              <h3 className="text-base font-black text-stroom-black">New Experiences Coming Soon</h3>
+              <p className="text-xs text-stroom-charcoal/70 mt-1 max-w-sm mx-auto">
+                We are curating upcoming weekend sessions for this city. Check back soon or browse all open cities.
               </p>
               <button
+                type="button"
                 onClick={() => setSelectedCityId('all')}
-                className="mt-4 px-5 py-2.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand"
+                className="mt-4 px-4 py-2 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand"
               >
-                Browse All Launch Cities
+                Browse All Open Cities
               </button>
             </div>
           )}
 
-        </div>
-      </section>
-
-      {/* ==================================================
-          SECTION 5 — HOW STROOM WORKS (4-Step Journey)
-          ================================================== */}
-      <section className="py-16 sm:py-20 border-b border-stroom-borderLight bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="text-center max-w-xl mx-auto mb-14">
-            <span className="text-xs font-black uppercase tracking-widest text-stroom-orange">
-              The Journey
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-black text-stroom-black mt-2 font-display">
-              How STROOM Works
-            </h2>
-            <p className="text-sm text-stroom-charcoal/70 mt-1 font-medium">
-              Four simple steps from curious stranger to proud squad member.
+          {/* 10 Category Quick Pills */}
+          <div className="mt-12 pt-8 border-t border-stroom-borderLight">
+            <p className="text-[10px] font-black uppercase tracking-widest text-stroom-charcoal/60 mb-4 text-center">
+              Explore Experiences by Passion
             </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            
-            <div className="p-6 rounded-3xl bg-stroom-ivory border border-stroom-borderLight text-center relative group hover:border-stroom-orange transition-all">
-              <span className="w-10 h-10 rounded-2xl bg-stroom-cream group-hover:bg-stroom-orange group-hover:text-white text-stroom-deep font-black text-xs mx-auto flex items-center justify-center mb-4 transition-colors">
-                01
-              </span>
-              <h4 className="text-base font-black text-stroom-black font-display">
-                Discover
-              </h4>
-              <p className="text-xs text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Find experiences and community circles matching your interests across Hyderabad and Pune.
-              </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+              {EXPERIENCE_CATEGORIES.map((cat) => {
+                const IconComponent = cat.icon;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => onGoToDiscover?.(cat.id)}
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white hover:bg-stroom-cream/60 border border-stroom-borderLight hover:border-stroom-orange/40 text-xs font-bold text-stroom-black transition-all hover:-translate-y-0.5 shadow-2xs"
+                  >
+                    <IconComponent className="w-3.5 h-3.5 text-stroom-orange" />
+                    <span>{cat.title}</span>
+                  </button>
+                );
+              })}
             </div>
-
-            <div className="p-6 rounded-3xl bg-stroom-ivory border border-stroom-borderLight text-center relative group hover:border-stroom-orange transition-all">
-              <span className="w-10 h-10 rounded-2xl bg-stroom-cream group-hover:bg-stroom-orange group-hover:text-white text-stroom-deep font-black text-xs mx-auto flex items-center justify-center mb-4 transition-colors">
-                02
-              </span>
-              <h4 className="text-base font-black text-stroom-black font-display">
-                Connect
-              </h4>
-              <p className="text-xs text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Meet people who share your vibe. Reserve your digital pass and arrive at our curated partner venues.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-stroom-ivory border border-stroom-borderLight text-center relative group hover:border-stroom-orange transition-all">
-              <span className="w-10 h-10 rounded-2xl bg-stroom-cream group-hover:bg-stroom-orange group-hover:text-white text-stroom-deep font-black text-xs mx-auto flex items-center justify-center mb-4 transition-colors">
-                03
-              </span>
-              <h4 className="text-base font-black text-stroom-black font-display">
-                Participate
-              </h4>
-              <p className="text-xs text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Join real-world activities and events. Bid with paddles, play on turfs, or debate in café circles.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-stroom-ivory border border-stroom-borderLight text-center relative group hover:border-stroom-orange transition-all">
-              <span className="w-10 h-10 rounded-2xl bg-stroom-cream group-hover:bg-stroom-orange group-hover:text-white text-stroom-deep font-black text-xs mx-auto flex items-center justify-center mb-4 transition-colors">
-                04
-              </span>
-              <h4 className="text-base font-black text-stroom-black font-display">
-                Remember
-              </h4>
-              <p className="text-xs text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Collect STROOM Passport stamps, stay connected with your squad, and build your unforgettable story.
-              </p>
-            </div>
-
           </div>
 
         </div>
       </section>
 
       {/* ==================================================
-          SECTION 6 — FEATURED COMMUNITIES (Hyderabad & Pune)
+          4. DISCOVER COMMUNITIES (Tribe Teaser Banner)
           ================================================== */}
-      <section className="py-16 sm:py-20 bg-stroom-cream/30 border-b border-stroom-borderLight">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-12">
-            <div>
+      <section className="py-16 sm:py-20 bg-gradient-to-br from-stroom-black via-stone-900 to-stroom-black text-white relative overflow-hidden border-b border-stroom-borderLight">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,87,34,0.15),transparent_60%)] pointer-events-none" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+            <div className="max-w-2xl space-y-3">
               <span className="text-xs font-black uppercase tracking-widest text-stroom-orange">
-                Real-World Tribes
+                Find Your Tribe
               </span>
-              <h2 className="text-3xl sm:text-4xl font-black text-stroom-black mt-2 font-display">
-                Featured Communities
+              <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight font-display">
+                Discover Interest-Based Communities
               </h2>
-            </div>
-            
-            <div className="flex items-center gap-3 mt-4 md:mt-0">
-              <p className="text-sm text-stroom-charcoal/80 font-medium hidden sm:block">
-                Launch focus: Hyderabad (#1) & Pune (#2)
+              <p className="text-sm sm:text-base text-stone-300 font-medium leading-relaxed">
+                Connect with verified local circles across sports, fitness, café meetups, cinema, and casual gaming in your neighborhood. Walk into events where everyone shares your passion.
               </p>
-              {onGoToCommunities && (
-                <button
-                  onClick={() => onGoToCommunities()}
-                  className="px-4 py-2 rounded-xl bg-stroom-charcoal text-white hover:bg-stroom-black text-xs font-black transition-all flex items-center gap-1.5"
-                >
-                  <span>Explore All Communities</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              )}
+            </div>
+            <div className="shrink-0 flex flex-wrap gap-4">
+              <button
+                type="button"
+                onClick={() => onGoToCommunities?.()}
+                className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-black text-sm shadow-brand hover:brightness-105 active:scale-98 transition-all flex items-center gap-2"
+              >
+                <Users className="w-4 h-4" />
+                <span>Explore All Communities</span>
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </button>
             </div>
           </div>
-
-          {isLoadingCommunities ? (
-            <div className="py-12 text-center">
-              <Loader2 className="w-8 h-8 animate-spin text-stroom-orange mx-auto mb-2" />
-              <p className="text-xs font-bold text-stroom-charcoal">Loading verified communities...</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {featuredCommunities.map((comm) => (
-                <div
-                  key={comm.id}
-                  className="rounded-3xl bg-white border border-stroom-borderLight overflow-hidden shadow-xs hover:shadow-brand transition-all flex flex-col justify-between group"
-                >
-                  <div>
-                    {/* Cover image */}
-                    <div className="relative h-44 w-full overflow-hidden bg-stroom-cream">
-                      <img
-                        src={comm.image_url}
-                        alt={comm.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-stroom-black/80 via-transparent to-transparent" />
-                      
-                      <div className="absolute top-3 left-3">
-                        <span className="px-2.5 py-1 rounded-full bg-stroom-black/85 backdrop-blur-md text-white text-[10px] font-black uppercase tracking-wider border border-white/20">
-                          {comm.city_name || 'Hyderabad'}
-                        </span>
-                      </div>
-
-                      <div className="absolute top-3 right-3">
-                        <span className="px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md text-stroom-black text-[10px] font-black">
-                          {comm.category}
-                        </span>
-                      </div>
-
-                      <div className="absolute bottom-3 left-3 text-xs text-white font-bold flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-stroom-cream" />
-                        <span>{comm.member_count} Members</span>
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="p-5">
-                      <h3 className="text-base font-black text-stroom-black group-hover:text-stroom-deep transition-colors leading-snug">
-                        {comm.name}
-                      </h3>
-                      <p className="text-xs text-stroom-charcoal/70 mt-1.5 leading-relaxed line-clamp-3">
-                        {comm.description}
-                      </p>
-                      <p className="text-[11px] font-bold text-stroom-orange mt-3 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        <span>{comm.meeting_schedule}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="p-5 pt-0 border-t border-stroom-cream mt-2 flex items-center justify-between">
-                    <span className="text-[11px] text-stroom-charcoal/60 font-semibold truncate max-w-[120px]">
-                      Led by {comm.organizer_name}
-                    </span>
-
-                    <button
-                      onClick={() => onGoToCommunityDetails ? onGoToCommunityDetails(comm.id) : onGoToCommunities?.()}
-                      className="px-4 py-2 rounded-xl bg-stroom-cream hover:bg-stroom-orange hover:text-white text-stroom-black text-xs font-black transition-all flex items-center gap-1"
-                    >
-                      <span>Explore</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
         </div>
       </section>
 
       {/* ==================================================
-          SECTION 7 — WHY JOIN STROOM?
-          ================================================== */}
-      <section className="py-16 sm:py-20 bg-white border-b border-stroom-borderLight">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="text-center max-w-xl mx-auto mb-14">
-            <span className="text-xs font-black uppercase tracking-widest text-stroom-orange">
-              The Real-World Difference
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-black text-stroom-black mt-2 font-display">
-              Why Join STROOM?
-            </h2>
-            <p className="text-sm text-stroom-charcoal/70 mt-1 font-medium">
-              Engineered from the ground up for meaningful, organic connections.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-            
-            <div className="p-6 rounded-3xl bg-stroom-ivory border border-stroom-borderLight hover:border-stroom-orange/40 transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mb-4">
-                <Users className="w-6 h-6 text-stroom-orange" />
-              </div>
-              <h4 className="text-base font-black text-stroom-black font-display">
-                Meet Beyond Your Circle
-              </h4>
-              <p className="text-xs text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Connect with people from diverse careers, backgrounds, and creative paths who are eager to make friends.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-stroom-ivory border border-stroom-borderLight hover:border-stroom-orange/40 transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mb-4">
-                <Target className="w-6 h-6 text-stroom-orange" />
-              </div>
-              <h4 className="text-base font-black text-stroom-black font-display">
-                Discover Activities
-              </h4>
-              <p className="text-xs text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Skip the guesswork. Join organized events with verified equipment, booking, and welcoming hosts.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-stroom-ivory border border-stroom-borderLight hover:border-stroom-orange/40 transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mb-4">
-                <Sparkles className="w-6 h-6 text-stroom-orange" />
-              </div>
-              <h4 className="text-base font-black text-stroom-black font-display">
-                Meaningful Experiences
-              </h4>
-              <p className="text-xs text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Structured activities ensure zero awkwardness and equal participation for everyone in the room.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-stroom-ivory border border-stroom-borderLight hover:border-stroom-orange/40 transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mb-4">
-                <Heart className="w-6 h-6 text-stroom-orange" />
-              </div>
-              <h4 className="text-base font-black text-stroom-black font-display">
-                Real-World Bonds
-              </h4>
-              <p className="text-xs text-stroom-charcoal/70 mt-2 leading-relaxed">
-                Over 90% of our attendees stay in close touch with their event squads for months afterward.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-3xl bg-stroom-ivory border border-stroom-borderLight hover:border-stroom-orange/40 transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-stroom-cream text-stroom-deep flex items-center justify-center mb-4">
-                <Globe className="w-6 h-6 text-stroom-orange" />
-              </div>
-              <h4 className="text-base font-black text-stroom-black font-display">
-                Cross-City Passport
-              </h4>
-              <p className="text-xs text-stroom-charcoal/70 mt-2 leading-relaxed">
-                One membership passport unlocks community circles in Hyderabad, Pune, Bangalore, and Mumbai.
-              </p>
-            </div>
-
-          </div>
-
-        </div>
-      </section>
-
-      {/* ==================================================
-          SECTION 8 — COMMUNITY STORIES (Testimonials)
+          5. REAL STORIES FROM STRANGERS (Dedicated Section)
           ================================================== */}
       <section className="py-16 sm:py-20 bg-stroom-cream/40 border-b border-stroom-borderLight">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -973,13 +765,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <h2 className="text-3xl sm:text-4xl font-black text-stroom-black mt-2 font-display">
               Real Stories from Strangers
             </h2>
+            <p className="text-xs sm:text-sm text-stroom-charcoal/70 mt-1 font-medium">
+              Authentic stories from members who showed up solo and built their lifelong squad.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {COMMUNITY_STORIES.map((t, idx) => (
               <div
                 key={idx}
-                className="p-6 rounded-3xl bg-white border border-stroom-borderLight shadow-xs flex flex-col justify-between"
+                className="p-6 sm:p-7 rounded-3xl bg-white border border-stroom-borderLight shadow-xs flex flex-col justify-between hover:shadow-brand hover:-translate-y-1 transition-all duration-300"
               >
                 <div>
                   <Quote className="w-8 h-8 text-stroom-orange/30 mb-3" />
@@ -989,11 +784,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </div>
                 <div className="mt-6 pt-4 border-t border-stroom-borderLight flex items-center justify-between">
                   <div>
-                    <h5 className="text-xs font-extrabold text-stroom-black">{t.author}</h5>
+                    <h4 className="text-xs font-extrabold text-stroom-black">{t.author}</h4>
                     <p className="text-[11px] text-stroom-charcoal/70">{t.role}</p>
                   </div>
-                  <span className="text-[10px] font-bold text-stroom-deep bg-stroom-cream px-2 py-0.5 rounded-full">
-                    {t.tag}
+                  <span className="text-[10px] font-bold text-stroom-deep bg-stroom-cream px-2.5 py-0.5 rounded-full border border-stroom-orange/20">
+                    {t.chapter}
                   </span>
                 </div>
               </div>
@@ -1004,25 +799,176 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ==================================================
-          SECTION 9 — FINAL CTA
+          6. LAUNCH HUB — 6 CITIES AVAILABILITY
+          ================================================== */}
+      <section className="py-16 sm:py-20 bg-white border-b border-stroom-borderLight">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <span className="text-xs font-black uppercase tracking-widest text-stroom-orange">
+              National Footprint
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-black text-stroom-black mt-2 font-display">
+              Launch Hub & City Availability
+            </h2>
+            <p className="text-xs sm:text-sm text-stroom-charcoal/70 mt-1 font-medium">
+              STROOM is live in Hyderabad and Pune, with Mumbai, Delhi, Bangalore, and Kolkata launching next.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {LAUNCH_CITIES.map((city) => (
+              <div
+                key={city.id}
+                className="rounded-3xl bg-stroom-ivory border border-stroom-borderLight overflow-hidden flex flex-col justify-between hover:border-stroom-orange/40 hover:-translate-y-1 transition-all duration-300 shadow-2xs"
+              >
+                <div>
+                  <div className="relative h-40 w-full overflow-hidden bg-stroom-cream">
+                    <img
+                      src={city.image}
+                      alt={city.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                    <div className="absolute top-3 right-3">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${city.badgeClass}`}>
+                        {city.isOpen ? 'Open' : 'Coming Soon'}
+                      </span>
+                    </div>
+                    <div className="absolute bottom-3 left-3 text-white">
+                      <h3 className="text-lg font-black">{city.name}</h3>
+                      <p className="text-[11px] font-bold text-stroom-orange">{city.state}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-5">
+                    <p className="text-xs text-stroom-charcoal/80 leading-relaxed font-medium">
+                      {city.description}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {city.areas.map((area, aIdx) => (
+                        <span key={aIdx} className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white border border-stroom-borderLight text-stroom-charcoal">
+                          {area}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-5 pt-0">
+                  {city.isOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCityId(city.id);
+                        onGoToDiscover?.(city.id);
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-extrabold text-xs shadow-brand hover:brightness-105 active:scale-98 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Compass className="w-3.5 h-3.5" />
+                      <span>Explore {city.name} Experiences</span>
+                    </button>
+                  ) : (
+                    <div className="w-full py-2.5 rounded-xl bg-stone-100 border border-stone-200 text-stone-500 font-bold text-xs text-center flex items-center justify-center gap-1.5 cursor-not-allowed">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Waitlist Open • Registrations Coming Soon</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </section>
+
+      {/* ==================================================
+          7. HOST OR BUILD YOUR COMMUNITY
+          ================================================== */}
+      <section className="py-16 sm:py-20 bg-gradient-to-b from-stroom-cream/40 via-stroom-ivory to-stroom-cream/60 border-b border-stroom-borderLight">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            {/* Host an Experience */}
+            <div className="p-8 sm:p-10 rounded-3xl bg-white border border-stroom-borderLight shadow-sm space-y-4 hover:border-stroom-orange/40 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-stroom-cream flex items-center justify-center text-stroom-deep">
+                <PlusCircle className="w-6 h-6 text-stroom-orange" />
+              </div>
+              <h3 className="text-2xl font-black text-stroom-black font-display">
+                Host an Experience in Your City
+              </h3>
+              <p className="text-xs sm:text-sm text-stroom-charcoal/80 leading-relaxed font-medium">
+                Got a passion for box cricket, acoustic music, bouldering, or chess? Create and lead a STROOM experience. We provide member discovery, venue booking support, and attendance verification.
+              </p>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsHostModalOpen(true)}
+                  className="px-5 py-3 rounded-2xl bg-stroom-black text-white font-black text-xs uppercase tracking-wider hover:bg-stone-800 transition-all flex items-center gap-2"
+                >
+                  <span>Propose an Experience</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Partner With Us */}
+            <div className="p-8 sm:p-10 rounded-3xl bg-white border border-stroom-borderLight shadow-sm space-y-4 hover:border-stroom-orange/40 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-stroom-cream flex items-center justify-center text-stroom-deep">
+                <Building2 className="w-6 h-6 text-stroom-orange" />
+              </div>
+              <h3 className="text-2xl font-black text-stroom-black font-display">
+                Partner Your Venue With STROOM
+              </h3>
+              <p className="text-xs sm:text-sm text-stroom-charcoal/80 leading-relaxed font-medium">
+                Own a turf, café, board game lounge, or creative studio? Become a certified STROOM destination. Bring genuine recurring community crowds to your location during peak and off-peak hours.
+              </p>
+              <div className="pt-2 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsPartnerModalOpen(true)}
+                  className="px-5 py-3 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-black text-xs uppercase tracking-wider shadow-brand hover:brightness-105 transition-all flex items-center gap-2"
+                >
+                  <span>Partner With Us</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                {onGoToPartnerWithUs && (
+                  <button
+                    type="button"
+                    onClick={onGoToPartnerWithUs}
+                    className="px-5 py-3 rounded-2xl bg-stroom-cream text-stroom-black font-black text-xs hover:bg-stroom-cream/80 transition-all"
+                  >
+                    Learn More
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ==================================================
+          8. FINAL CTA — JOIN THE STROOM COMMUNITY
           ================================================== */}
       <section className="py-20 bg-gradient-to-r from-stroom-black via-stroom-charcoal to-stroom-black text-white relative overflow-hidden border-b border-stroom-borderDark">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10 space-y-6">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stroom-orange/20 border border-stroom-orange/40 text-stroom-orange text-xs font-black uppercase tracking-widest">
             <Sparkles className="w-3.5 h-3.5" />
-            Join the Movement
+            Official Launch
           </div>
 
           <h2 className="text-3xl sm:text-5xl font-black text-white font-display tracking-tight leading-tight">
             Your Next Story Starts Here.
           </h2>
 
-          <p className="text-sm sm:text-base text-stroom-cream/80 max-w-xl mx-auto leading-relaxed">
-            Step out, meet people, explore experiences, and make every connection count.
+          <p className="text-sm sm:text-base text-stroom-cream/80 max-w-xl mx-auto leading-relaxed font-medium">
+            Step out, meet people, explore experiences, and turn strangers into unforgettable friends.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
             <button
+              type="button"
               onClick={onGoToAuth}
               className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-black text-sm shadow-brand hover:brightness-105 active:scale-95 transition-all"
             >
@@ -1030,17 +976,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={() => onGoToDiscover?.()}
               className="px-7 py-3.5 rounded-2xl bg-white text-stroom-black hover:bg-stroom-cream font-black text-sm transition-all"
             >
-              Discover Events
+              Discover Experiences
             </button>
           </div>
         </div>
       </section>
 
       {/* ==================================================
-          SECTION 10 — FOOTER
+          FOOTER
           ================================================== */}
       <footer className="bg-stroom-black text-white pt-16 pb-8 border-t border-stroom-borderDark relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
@@ -1057,21 +1004,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   href="https://instagram.com/stroom.club"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-9 h-9 rounded-full bg-stroom-cardDark hover:bg-stroom-orange flex items-center justify-center text-white transition-colors"
+                  className="w-9 h-9 rounded-full bg-stone-800 hover:bg-stroom-orange flex items-center justify-center text-white transition-colors"
                   title="STROOM Instagram"
                 >
                   <Share2 className="w-4 h-4" />
                 </a>
                 <button
+                  type="button"
                   onClick={onGoToContact}
-                  className="w-9 h-9 rounded-full bg-stroom-cardDark hover:bg-stroom-orange flex items-center justify-center text-white transition-colors"
+                  className="w-9 h-9 rounded-full bg-stone-800 hover:bg-stroom-orange flex items-center justify-center text-white transition-colors"
                   title="Contact Support"
                 >
                   <MessageCircle className="w-4 h-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={onGoToAbout}
-                  className="w-9 h-9 rounded-full bg-stroom-cardDark hover:bg-stroom-orange flex items-center justify-center text-white transition-colors"
+                  className="w-9 h-9 rounded-full bg-stone-800 hover:bg-stroom-orange flex items-center justify-center text-white transition-colors"
                   title="About STROOM"
                 >
                   <Globe className="w-4 h-4" />
@@ -1085,12 +1034,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 Explore Platform
               </h4>
               <ul className="space-y-2 text-xs text-stroom-cream/70 font-semibold">
-                <li><button onClick={() => onGoToDiscover?.()} className="hover:text-white transition-colors">Discover Events</button></li>
-                <li><button onClick={() => onGoToCommunities?.()} className="hover:text-white transition-colors">Communities</button></li>
-                <li><button onClick={onGoToAuction} className="hover:text-white transition-colors">Live Cricket Auction Hub</button></li>
-                <li><button onClick={onGoToAbout} className="hover:text-white transition-colors">About STROOM</button></li>
-                <li><button onClick={onGoToPartnerWithUs} className="hover:text-white transition-colors">Partner With Us</button></li>
-                <li><button onClick={onGoToFaqs} className="hover:text-white transition-colors">Frequently Asked Questions</button></li>
+                <li><button type="button" onClick={() => onGoToDiscover?.()} className="hover:text-white transition-colors">Discover Experiences</button></li>
+                <li><button type="button" onClick={() => onGoToCommunities?.()} className="hover:text-white transition-colors">Communities</button></li>
+                <li><button type="button" onClick={onGoToAbout} className="hover:text-white transition-colors">About STROOM</button></li>
+                <li><button type="button" onClick={onGoToPartnerWithUs} className="hover:text-white transition-colors">Partner With Us</button></li>
+                <li><button type="button" onClick={onGoToFaqs} className="hover:text-white transition-colors">Frequently Asked Questions</button></li>
               </ul>
             </div>
 
@@ -1100,10 +1048,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 Launch Hubs
               </h4>
               <ul className="space-y-2 text-xs text-stroom-cream/70 font-semibold">
-                <li><span className="text-white font-bold">Hyderabad</span> (#1 Flagship)</li>
-                <li><span className="text-white font-bold">Pune</span> (#2 Live Hub)</li>
-                <li><span>Bangalore</span> (Waitlist Open)</li>
-                <li><span>Mumbai</span> (Waitlist Open)</li>
+                <li><span className="text-white font-bold">Hyderabad</span> (Open)</li>
+                <li><span className="text-white font-bold">Pune</span> (Open)</li>
+                <li><span>Mumbai</span> (Coming Soon)</li>
+                <li><span>Delhi</span> (Coming Soon)</li>
+                <li><span>Bangalore</span> (Coming Soon)</li>
+                <li><span>Kolkata</span> (Coming Soon)</li>
               </ul>
             </div>
 
@@ -1123,8 +1073,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-stroom-borderDark/60 flex items-center gap-4 text-xs text-stroom-cream/60">
+              <div className="pt-3 border-t border-stone-800 flex items-center gap-4 text-xs text-stroom-cream/60">
                 <button
+                  type="button"
                   onClick={() => setPolicyModalType('privacy')}
                   className="hover:text-white hover:underline transition-colors"
                 >
@@ -1132,6 +1083,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </button>
                 <span>•</span>
                 <button
+                  type="button"
                   onClick={() => setPolicyModalType('terms')}
                   className="hover:text-white hover:underline transition-colors"
                 >
@@ -1160,8 +1112,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <RegistrationModal
         event={selectedEvent}
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onRegistrationSuccess={loadEvents}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedEvent(null);
+        }}
+        onRegistrationSuccess={() => {
+          loadEvents();
+          if (onGoToParticipant) onGoToParticipant();
+        }}
       />
 
       {/* Partner Proposal Modal */}
@@ -1178,77 +1136,50 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       {/* Privacy Policy Modal */}
       {policyModalType === 'privacy' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stroom-black/80 backdrop-blur-sm animate-fade-in text-stroom-black">
-          <div className="w-full max-w-lg bg-white rounded-3xl p-6 border border-stroom-borderLight shadow-2xl relative max-h-[85vh] overflow-y-auto">
-            <button
-              onClick={() => setPolicyModalType(null)}
-              className="absolute top-4 right-4 text-stone-400 hover:text-stroom-black"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-lg font-black text-stroom-black font-display mb-3">
-              STROOM Privacy Policy
-            </h3>
-            <div className="space-y-3 text-xs text-stroom-charcoal/80 leading-relaxed font-medium">
-              <p>
-                <strong>1. Information Collection:</strong> STROOM collects account contact information (name, email, phone number) when you register for events or join community circles. This information is used strictly to generate your verified Digital Entry Pass and communicate event details.
-              </p>
-              <p>
-                <strong>2. Community Privacy:</strong> We protect member contact details. Other participants only see your display name and public achievements. Your email and phone are never publicly listed.
-              </p>
-              <p>
-                <strong>3. Partner Verification:</strong> When you present your QR pass at a partner venue, only your attendance status and pass code are verified.
-              </p>
-              <p>
-                <strong>4. Data Security:</strong> Passwords are encrypted with cryptographic salts. We do not sell or lease personal data to external advertisers.
-              </p>
-            </div>
-            <div className="mt-6 pt-3 border-t border-stroom-cream text-right">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="p-6 border-b border-stroom-borderLight flex items-center justify-between bg-stroom-ivory">
+              <h3 className="text-lg font-black text-stroom-black font-display">STROOM Privacy Policy</h3>
               <button
+                type="button"
                 onClick={() => setPolicyModalType(null)}
-                className="px-4 py-2 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand"
+                className="w-8 h-8 rounded-full bg-stone-200 hover:bg-stone-300 flex items-center justify-center text-stone-700"
               >
-                Close Policy
+                <X className="w-4 h-4" />
               </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4 text-xs text-stroom-charcoal/90 leading-relaxed font-sans">
+              <p><strong>Effective Date:</strong> January 2026</p>
+              <p>STROOM ("Strangers Room") is committed to safeguarding the privacy and personal security of all community participants, partners, and organizers.</p>
+              <p><strong>1. Information Collection:</strong> We collect details such as your name, contact information, profile preferences, and attendance history when registering for events or joining community circles.</p>
+              <p><strong>2. Use of Information:</strong> Collected data is strictly used to facilitate event check-ins, generate digital verified entry passes, match shared interest circles, and coordinate safety with venue hosts.</p>
+              <p><strong>3. Photo and Media:</strong> Photographs taken during public community gatherings may be used for verified community storytelling only with member authorization.</p>
+              <p><strong>4. Data Security:</strong> Passwords are encrypted with cryptographic salts. We do not sell or lease personal data to external advertisers.</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Terms & Conditions Modal */}
+      {/* Terms and Conditions Modal */}
       {policyModalType === 'terms' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stroom-black/80 backdrop-blur-sm animate-fade-in text-stroom-black">
-          <div className="w-full max-w-lg bg-white rounded-3xl p-6 border border-stroom-borderLight shadow-2xl relative max-h-[85vh] overflow-y-auto">
-            <button
-              onClick={() => setPolicyModalType(null)}
-              className="absolute top-4 right-4 text-stone-400 hover:text-stroom-black"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-lg font-black text-stroom-black font-display mb-3">
-              STROOM Terms & Conditions
-            </h3>
-            <div className="space-y-3 text-xs text-stroom-charcoal/80 leading-relaxed font-medium">
-              <p>
-                <strong>1. Code of Conduct:</strong> STROOM is built on belonging, mutual respect, and friendly camaraderie. Harassment, discrimination, or abusive conduct at any online or in-person meetup results in immediate revocation of membership and passes.
-              </p>
-              <p>
-                <strong>2. Event Passes & Attendance:</strong> Digital passes are personal. Duplicate entry attempts are blocked by our door check-in terminal. Please notify cancellation at least 24 hours prior to the event.
-              </p>
-              <p>
-                <strong>3. Fantasy Bidding Entertainment:</strong> The STROOM Live Cricket Auction is an entertainment and community format. All currency units (e.g. ₹10 Crores) are virtual fantasy tokens with zero cash value. No gambling or betting takes place.
-              </p>
-              <p>
-                <strong>4. Venue Safety:</strong> Participants agree to respect partner venues (cafes, sports turfs, lounges) and follow local venue safety regulations.
-              </p>
-            </div>
-            <div className="mt-6 pt-3 border-t border-stroom-cream text-right">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="p-6 border-b border-stroom-borderLight flex items-center justify-between bg-stroom-ivory">
+              <h3 className="text-lg font-black text-stroom-black font-display">STROOM Terms of Participation</h3>
               <button
+                type="button"
                 onClick={() => setPolicyModalType(null)}
-                className="px-4 py-2 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand"
+                className="w-8 h-8 rounded-full bg-stone-200 hover:bg-stone-300 flex items-center justify-center text-stone-700"
               >
-                Accept & Close
+                <X className="w-4 h-4" />
               </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4 text-xs text-stroom-charcoal/90 leading-relaxed font-sans">
+              <p><strong>Community Standard:</strong> STROOM experiences are built on mutual respect, friendly collaboration, and safe, inclusive community interaction.</p>
+              <p><strong>1. Code of Conduct:</strong> Harassment, discriminatory speech, uninvited physical contact, or disruptive actions will result in immediate pass revocation and permanent ban from STROOM.</p>
+              <p><strong>2. Event Passes:</strong> Passes are issued individually to verified users and are non-transferable at the gate terminal scanner.</p>
+              <p><strong>3. Cancellations & Seats:</strong> When cancelling an event pass, notice must be provided through the Participant Hub so released seats can be made available to members on waitlists.</p>
+              <p><strong>4. Safety:</strong> Sports and outdoor activities require attendees to adhere to turf guidelines and prioritize personal safety and the safety of teammates.</p>
             </div>
           </div>
         </div>
@@ -1257,3 +1188,4 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     </div>
   );
 };
+export default LandingPage;

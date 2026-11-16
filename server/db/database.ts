@@ -851,8 +851,10 @@ export function seedExtendedDomainData() {
 
     insertCity.run('city_hyd', 'Hyderabad', 'Telangana', 1, 1, 'Flagship Launch Hub • Jubilee Hills & Gachibowli');
     insertCity.run('city_pune', 'Pune', 'Maharashtra', 1, 2, 'Premier Expansion Hub • FC Road & Koregaon Park');
-    insertCity.run('city_blr', 'Bangalore', 'Karnataka', 1, 3, 'South Community Hub • Indiranagar');
-    insertCity.run('city_mum', 'Mumbai', 'Maharashtra', 1, 4, 'Coastal Arena Hub • Bandra West');
+    insertCity.run('city_mum', 'Mumbai', 'Maharashtra', 0, 3, 'Western Coastal Hub • Bandra West & BKC (Coming Soon)');
+    insertCity.run('city_delhi', 'Delhi', 'Delhi NCR', 0, 4, 'Capital Social Hub • Hauz Khas & CP (Coming Soon)');
+    insertCity.run('city_blr', 'Bangalore', 'Karnataka', 0, 5, 'Tech & Social Circle Hub • Indiranagar & Koramangala (Coming Soon)');
+    insertCity.run('city_kolkata', 'Kolkata', 'West Bengal', 0, 6, 'Cultural & Meetup Hub • Park Street & Salt Lake (Coming Soon)');
 
     // 2. Ensure Verified Real Venues
     const insertVenue = db.prepare(`
@@ -1569,10 +1571,10 @@ export function seedExtendedDomainData() {
       'community',
       'Hyderabad Weekend Cricket Brotherhood',
       '540 cricket fans & players',
-      'Weekly box cricket, turf leagues, and live auction watch-alongs across Jubilee Hills and Gachibowli.',
+      'Weekly box cricket, turf leagues, and sporting watch-alongs across Jubilee Hills and Gachibowli.',
       'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
       'Cricket',
-      JSON.stringify(['cricket_auctions', 'sports', 'friendship', 'social_meetups']),
+      JSON.stringify(['sports', 'friendship', 'social_meetups']),
       'Jubilee Hills, Hyderabad',
       540,
       'Every Saturday 06:30 AM'
@@ -1623,12 +1625,12 @@ export function seedExtendedDomainData() {
     insertDiscovery.run(
       'disc_hyd_auction',
       'event',
-      'STROOM Live Cricket Auction & Franchise Gala',
+      'STROOM Hyderabad Turf Cricket Championship',
       'Saturday, Dec 5 • 50 seats',
-      'Real auction paddles, ₹10 Crore virtual budgets, franchise team bidding, and live networking with Hyderabad cricket fans.',
+      'Floodlit turf box cricket, team squads, live networking, and post-match refreshments with Hyderabad sports fans.',
       'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80',
-      'Cricket Auction',
-      JSON.stringify(['cricket_auctions', 'sports', 'friendship', 'social_meetups']),
+      'Cricket & Sports',
+      JSON.stringify(['sports', 'friendship', 'social_meetups']),
       'Jubilee Hills, Hyderabad',
       50,
       'Saturday, Dec 5 • 5:00 PM'
@@ -1665,12 +1667,12 @@ export function seedExtendedDomainData() {
     insertDiscovery.run(
       'disc_person_aarav',
       'person',
-      'Aarav Sharma — Auctioneer & Community Captain',
+      'Aarav Sharma — Community Sports Captain',
       'Hyderabad Chapter • 24 Meetups Hosted',
-      'Lifelong Hyderabad cricket fanatic, amateur commentator, and licensed auctioneer. Loves turning awkward icebreakers into loud team chants.',
+      'Lifelong Hyderabad cricket fanatic and sports host. Loves turning awkward icebreakers into loud team chants.',
       'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&auto=format&fit=crop&q=80',
       'Community Host',
-      JSON.stringify(['cricket_auctions', 'sports', 'friendship']),
+      JSON.stringify(['sports', 'friendship']),
       'Hyderabad, India',
       1200,
       'Active Host'
@@ -2118,7 +2120,7 @@ function migratePhase5Tables() {
         'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=200&auto=format&fit=crop&q=80',
         'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=1000&auto=format&fit=crop&q=80',
         'Café & Restaurant',
-        'Specialty coffee roastery and spacious upstairs community loft built for interactive social mixers, board game nights, and cricket auction tables.',
+        'Specialty coffee roastery and spacious upstairs community loft built for interactive social mixers, board game nights, and social meetups.',
         'Aditya Reddy',
         'partner@stroom.app',
         '+91 98490 12345',
@@ -2130,7 +2132,7 @@ function migratePhase5Tables() {
         75,
         '["High-Speed Wi-Fi","Projector & HDMI","Acoustic Mic Setup","Dedicated Mezzanine Floor","Specialty Espresso Bar","Valet Parking"]',
         '{"mon_fri":"08:00 AM - 11:30 PM","sat_sun":"08:00 AM - 12:30 AM"}',
-        '["Host community events","Café meetups","Cricket auctions","Gaming events","Brand promotions"]',
+        '["Host community events","Café meetups","Sports tournaments","Gaming events","Brand promotions"]',
         'Verified',
         'Verified flagship hospitality partner for Hyderabad launch.',
         5,
@@ -2165,7 +2167,7 @@ function migratePhase5Tables() {
         150,
         '["Floodlit Box Cricket Turf","Locker & Shower Rooms","Live Scoreboard Screen","Outdoor Deck Seating","First Aid Kit"]',
         '{"mon_fri":"06:00 AM - 11:00 PM","sat_sun":"05:30 AM - 11:30 PM"}',
-        '["Sports activities","Cricket auctions","Fitness activities","Special campaigns"]',
+        '["Sports activities","Box cricket tournaments","Fitness activities","Special campaigns"]',
         'Verified',
         'Verified Flagship Sports Arena in Hyderabad.',
         5,
@@ -2200,7 +2202,7 @@ function migratePhase5Tables() {
         100,
         '["Stage & PA Audio","Dedicated Event Mezzanine","Full Kitchen & Bar","Co-working Power Outlets","Wi-Fi"]',
         '{"mon_fri":"09:00 AM - 11:30 PM","sat_sun":"09:00 AM - 01:00 AM"}',
-        '["Host community events","College collaborations","Cricket auctions","Gaming events"]',
+        '["Host community events","College collaborations","Sports tournaments","Gaming events"]',
         'Verified',
         'Verified Pune flagship partner.',
         5,
@@ -2246,15 +2248,15 @@ function migratePhase5Tables() {
         'evt_hyd_auction_01',
         'admin',
         'Aarav Sharma (STROOM Community Lead)',
-        'STROOM Hyderabad Premier Cricket Auction 2026',
-        'cricket_auction',
-        'Interactive live community IPL-style franchise auction with 5 team tables, big-screen auction ticker, and guided networking.',
+        'STROOM Hyderabad Premier Turf Cricket Championship',
+        'cricket',
+        'Interactive live community box cricket tournament with 5 team squads and guided networking.',
         '2026-11-28',
         '5:00 PM IST',
         60,
         'Cricket enthusiasts, young professionals, startup builders in Hyderabad (ages 21-35)',
-        'Reserve Jubilee Hills upstairs loft (60 seats), set up 5 franchise roundtables, honor STROOMJUBILEE20 voucher at register.',
-        'Manage all participant ticketing & QR door check-ins, supply auctioneer & projector display, promote across Hyderabad circles.',
+        'Reserve Jubilee Hills upstairs loft (60 seats), set up team roundtables, honor STROOMJUBILEE20 voucher at register.',
+        'Manage all participant ticketing & QR door check-ins, supply event kit & display, promote across Hyderabad circles.',
         'Featured event card on STROOM Discover & WhatsApp communities + co-branded post-event highlights reel.',
         'Zero venue rental fee; guaranteed F&B menu access with 20% member offer (no minimum spend guarantee).',
         'HDMI connection to 75-inch TV + 2 wireless handheld microphones.',
@@ -2464,12 +2466,6 @@ function migratePhase6Tables() {
       requireCampaignApproval: true,
       defaultCollaborationTarget: 50,
     }), 'Partner verification and campaign governance rules');
-    insertSetting.run('auctions', 'Auction Settings', JSON.stringify({
-      defaultPurseCap: 10000000,
-      defaultMinBidIncrement: 25000,
-      defaultCountdownSeconds: 15,
-      autoExtendSeconds: 15,
-    }), 'Default sports auction floor engine rules');
     insertSetting.run('notifications', 'Notification Settings', JSON.stringify({
       inAppEnabled: true,
       emailProviderStatus: 'Not configured (In-App delivery active)',

@@ -44,12 +44,12 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
   onClose,
   onRegistrationSuccess,
 }) => {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [formData, setFormData] = useState({
-    name: user?.full_name || (user as any)?.name || 'Karan Mehra',
-    email: user?.email || 'karan@stroom.club',
-    phone: user?.phone || '+91 98765 43210',
-    experienceLevel: 'Live Bidder / Team Owner (Table Seat)',
+    name: user?.full_name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    experienceLevel: 'Active Participant',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -64,7 +64,7 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
     if (user) {
       setFormData(prev => ({
         ...prev,
-        name: user.full_name || (user as any)?.name || prev.name,
+        name: user.full_name || prev.name,
         email: user.email || prev.email,
         phone: user.phone || prev.phone,
       }));
@@ -77,6 +77,12 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
     e.preventDefault();
     setIsSubmitting(true);
     setErrorMessage(null);
+
+    if (!isAuthenticated || !user) {
+      setErrorMessage('Please sign in or create an account to register for this event.');
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const res = await api.registerForEvent(event.id, {
@@ -101,14 +107,7 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
         setErrorMessage(res?.error || 'Registration failed. Please try again.');
       }
     } catch (err: any) {
-      // Fallback: generate local pass if network is unreachable
-      const fallbackCode = `STR-${event.city.substring(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      setPassData({
-        passCode: fallbackCode,
-        qrToken: `token-${Date.now()}`,
-        status: 'confirmed',
-      });
-      setIsSuccess(true);
+      setErrorMessage(err?.message || 'Registration failed. Please verify your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -221,9 +220,9 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
                   onChange={(e) => setFormData({ ...formData, experienceLevel: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-stroom-borderLight focus:border-stroom-orange focus:ring-2 focus:ring-stroom-orange/20 text-sm font-semibold text-stroom-black outline-none transition-all"
                 >
-                  <option value="Live Bidder / Team Owner (Table Seat)">Live Bidder / Team Owner (Table Seat)</option>
-                  <option value="Player In Auction Pool">Cricket Player (Seeking Squad Draft)</option>
-                  <option value="Community Audience">Community Fan & Cheerleader (Live Lounge)</option>
+                  <option value="Active Participant">Active Participant</option>
+                  <option value="Team / Group Captain">Team / Group Captain</option>
+                  <option value="Community Audience">Community Fan & Supporter</option>
                 </select>
               </div>
 

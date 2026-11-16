@@ -77,7 +77,6 @@ export const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
   const quickActions = [
     { label: 'Create Event', section: 'events', perm: 'events.create', icon: Plus },
     { label: 'Add Community', section: 'communities', perm: 'communities.manage', icon: Users },
-    { label: 'Create Auction', section: 'auctions', perm: 'auctions.manage', icon: Trophy },
     { label: 'Verify Partners', section: 'partners', perm: 'partners.verify', icon: Building2 },
     { label: 'Manage Venues', section: 'venues', perm: 'venues.manage', icon: MapPin },
     { label: 'Open Door Check-in', section: 'checkin', perm: 'checkin.access', icon: ScanLine },
@@ -90,7 +89,7 @@ export const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
         <div>
           <h2 className="text-xl font-black text-stroom-black font-display">Platform Operations Overview</h2>
           <p className="text-xs text-stroom-charcoal/70">
-            Live SQLite metrics across members, events, communities, partners, auctions, and check-ins. Active members: {m.activePeriodLabel}.
+            Live SQLite metrics across members, events, communities, partners, and check-ins. Active members: {m.activePeriodLabel}.
           </p>
         </div>
         <button
@@ -165,7 +164,7 @@ export const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
             <Building2 className="w-4 h-4 text-stroom-orange" />
           </div>
           <p className="text-2xl font-black text-stroom-black font-display">{m.verifiedPartners ?? 0} Partners</p>
-          <p className="text-[10px] text-stone-500 mt-1">{m.activeVenues ?? 0} venues • {m.totalCommunities ?? 0} communities • {m.liveAuctions ?? 0} live auctions</p>
+          <p className="text-[10px] text-stone-500 mt-1">{m.activeVenues ?? 0} venues • {m.totalCommunities ?? 0} communities</p>
         </div>
       </div>
 
@@ -225,7 +224,7 @@ export const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
 
         <div className="p-5 rounded-3xl bg-white border border-stroom-borderLight shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-stroom-borderLight">
-            <h4 className="text-sm font-black text-stroom-black font-display">Partner Applications & Auction Activity</h4>
+            <h4 className="text-sm font-black text-stroom-black font-display">Partner Applications</h4>
             {allowedSections.includes('partners') && (
               <button onClick={() => onNavigateSection('partners')} className="text-[11px] font-bold text-stroom-orange hover:underline flex items-center gap-1">
                 <span>Partner Queue</span>
@@ -234,7 +233,7 @@ export const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
             )}
           </div>
           <div className="space-y-2 text-xs">
-            {(act.partnerApplications || []).slice(0, 3).map((p: any) => (
+            {(act.partnerApplications || []).slice(0, 4).map((p: any) => (
               <div key={p.id} className="p-2.5 rounded-xl bg-stroom-ivory flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-bold text-stroom-black truncate">{p.business_name}</p>
@@ -243,15 +242,6 @@ export const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
                 <span className="px-2 py-0.5 rounded-full bg-stroom-cream text-stroom-deep text-[10px] font-black uppercase shrink-0">
                   {p.verification_status}
                 </span>
-              </div>
-            ))}
-            {(act.recentAuctionActivity || []).slice(0, 2).map((b: any) => (
-              <div key={b.id} className="p-2.5 rounded-xl bg-stone-50 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-bold text-stroom-black truncate">Bid: {b.player_name} → {b.team_name}</p>
-                  <p className="text-[10px] text-stone-500">{b.auction_title}</p>
-                </div>
-                <span className="font-mono font-black text-stroom-orange shrink-0">₹{Number(b.amount).toLocaleString('en-IN')}</span>
               </div>
             ))}
           </div>

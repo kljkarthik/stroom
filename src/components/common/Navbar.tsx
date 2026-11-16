@@ -3,7 +3,6 @@ import { useAuth } from '../../context/AuthContext';
 import { StroomLogo } from './StroomLogo';
 import { NotificationDropdown } from './NotificationDropdown';
 import {
-  Trophy,
   Compass,
   Shield,
   User as UserIcon,
@@ -18,8 +17,6 @@ import {
   Users,
   Info,
   HelpCircle,
-  Flame,
-  ArrowRight,
   Award,
   Sliders
 } from 'lucide-react';
@@ -33,7 +30,6 @@ export type ActiveTab =
   | 'about'
   | 'partner_with_us'
   | 'contact_faq'
-  | 'auction'
   | 'participant'
   | 'partner'
   | 'admin';
@@ -55,17 +51,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
-  // If in auction view, use dark theme navbar to match the arena!
-  const isAuctionTab = currentTab === 'auction';
-
   return (
-    <header
-      className={`sticky top-0 z-40 transition-colors ${
-        isAuctionTab
-          ? 'bg-stroom-black/95 backdrop-blur-xl border-b border-stroom-borderDark text-white'
-          : 'bg-stroom-ivory/95 backdrop-blur-xl border-b border-stroom-borderLight text-stroom-black shadow-xs'
-      }`}
-    >
+    <header className="sticky top-0 z-40 transition-colors bg-stroom-ivory/95 backdrop-blur-xl border-b border-stroom-borderLight text-stroom-black shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         
         {/* Brand Logo & Full Identity */}
@@ -75,27 +62,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           title="STROOM — Strangers Today. Stories Tomorrow."
         >
           <StroomLogo
-            variant={isAuctionTab ? 'light' : 'dark'}
+            variant="dark"
             size="md"
             showSubtitle={true}
           />
         </div>
 
         {/* Desktop Navigation Links */}
-        <nav
-          className={`hidden xl:flex items-center gap-1 p-1.5 rounded-2xl border ${
-            isAuctionTab
-              ? 'bg-stroom-cardDark/90 border-stroom-borderDark'
-              : 'bg-white/90 border-stroom-borderLight shadow-xs'
-          }`}
-        >
+        <nav className="hidden xl:flex items-center gap-1 p-1.5 rounded-2xl border bg-white/90 border-stroom-borderLight shadow-xs">
           <button
             onClick={() => onSelectTab('landing')}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
               currentTab === 'landing'
                 ? 'bg-stroom-orange text-white shadow-brand'
-                : isAuctionTab
-                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
                 : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
             }`}
           >
@@ -108,8 +87,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
               currentTab === 'discover' || currentTab === 'event_details'
                 ? 'bg-stroom-orange text-white shadow-brand'
-                : isAuctionTab
-                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
                 : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
             }`}
           >
@@ -122,8 +99,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
               currentTab === 'communities' || currentTab === 'community_details'
                 ? 'bg-stroom-orange text-white shadow-brand'
-                : isAuctionTab
-                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
                 : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
             }`}
           >
@@ -136,8 +111,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
               currentTab === 'about'
                 ? 'bg-stroom-orange text-white shadow-brand'
-                : isAuctionTab
-                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
                 : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
             }`}
           >
@@ -150,8 +123,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
               currentTab === 'partner_with_us' || currentTab === 'partner'
                 ? 'bg-stroom-orange text-white shadow-brand'
-                : isAuctionTab
-                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
                 : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
             }`}
           >
@@ -164,49 +135,37 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ${
               currentTab === 'contact_faq'
                 ? 'bg-stroom-orange text-white shadow-brand'
-                : isAuctionTab
-                ? 'text-stroom-cream/80 hover:text-white hover:bg-white/5'
                 : 'text-stroom-charcoal hover:text-stroom-black hover:bg-stroom-cream/60'
             }`}
           >
             <HelpCircle className="w-3.5 h-3.5" />
             <span>FAQs</span>
           </button>
-
-          {/* Auction Hub Quick Access */}
-          <button
-            onClick={() => onSelectTab('auction')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black transition-all ml-1 ${
-              currentTab === 'auction'
-                ? 'bg-stroom-orange text-white shadow-brand'
-                : 'bg-stroom-black text-stroom-cream hover:bg-stone-800'
-            }`}
-          >
-            <Trophy className="w-3.5 h-3.5 text-stroom-orange" />
-            <span>Auction Arena</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-stroom-orange animate-ping" />
-          </button>
         </nav>
 
         {/* Right Section: User & Account Switcher */}
         <div className="flex items-center gap-2.5">
           {isAuthenticated && (
-            <NotificationDropdown dark={isAuctionTab} />
+            <NotificationDropdown dark={false} />
           )}
 
           {isAuthenticated ? (
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className={`flex items-center gap-2 p-1.5 pr-3 rounded-2xl border text-xs font-extrabold transition-colors ${
-                  isAuctionTab
-                    ? 'bg-stroom-surfaceDark border-stroom-borderDark text-white hover:border-stroom-orange'
-                    : 'bg-white border-stroom-borderLight text-stroom-black hover:border-stroom-orange'
-                }`}
+                className="flex items-center gap-2 p-1.5 pr-3 rounded-2xl border text-xs font-extrabold transition-colors bg-white border-stroom-borderLight text-stroom-black hover:border-stroom-orange"
               >
-                <div className="w-7 h-7 rounded-xl bg-stroom-orange text-white flex items-center justify-center font-bold text-xs">
-                  {user?.full_name?.charAt(0) || 'U'}
-                </div>
+                {user?.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.full_name || 'Member'}
+                    className="w-7 h-7 rounded-xl object-cover border border-stroom-orange/30"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-xl bg-stroom-orange text-white flex items-center justify-center font-bold text-xs">
+                    {user?.full_name?.charAt(0) || 'U'}
+                  </div>
+                )}
                 <span className="hidden sm:inline max-w-[100px] truncate">
                   {user?.full_name || 'Member'}
                 </span>
@@ -215,12 +174,25 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {dropdownOpen && (
                 <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white border border-stroom-borderLight shadow-2xl p-2 z-50 text-stroom-black animate-fade-in">
-                  <div className="p-2 border-b border-stroom-cream mb-1">
-                    <p className="text-xs font-black text-stroom-black truncate">{user?.full_name}</p>
-                    <p className="text-[10px] text-stroom-charcoal/70 truncate">{user?.email}</p>
-                    <span className="inline-block mt-1 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-stroom-cream text-stroom-deep">
-                      {user?.role === 'admin' ? 'Administrator' : 'Participant'}
-                    </span>
+                  <div className="p-2 border-b border-stroom-cream mb-1 flex items-center gap-2.5">
+                    {user?.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt={user.full_name || 'Member'}
+                        className="w-9 h-9 rounded-xl object-cover border border-stroom-orange/40 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-xl bg-stroom-orange text-white flex items-center justify-center font-bold text-sm shrink-0">
+                        {user?.full_name?.charAt(0) || 'U'}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-black text-stroom-black truncate">{user?.full_name}</p>
+                      <p className="text-[10px] text-stroom-charcoal/70 truncate">{user?.email}</p>
+                      <span className="inline-block mt-0.5 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-stroom-cream text-stroom-deep">
+                        {user?.role === 'admin' ? 'Administrator' : 'Participant'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="space-y-1">
@@ -255,17 +227,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     >
                       <Sliders className="w-3.5 h-3.5 text-stroom-charcoal" />
                       <span>Profile Studio</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        onSelectTab('auction');
-                        setDropdownOpen(false);
-                      }}
-                      className="w-full text-left p-2 rounded-xl text-xs font-bold hover:bg-stroom-cream flex items-center gap-2"
-                    >
-                      <Trophy className="w-3.5 h-3.5 text-stroom-orange" />
-                      <span>Live Cricket Auction</span>
                     </button>
 
                     <button
@@ -332,11 +293,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Mobile Hamburger Toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className={`xl:hidden p-2 rounded-xl border ${
-              isAuctionTab
-                ? 'bg-stroom-surfaceDark border-stroom-borderDark text-white'
-                : 'bg-white border-stroom-borderLight text-stroom-black'
-            }`}
+            className="xl:hidden p-2 rounded-xl border bg-white border-stroom-borderLight text-stroom-black"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -346,13 +303,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
-        <div
-          className={`xl:hidden border-t px-4 py-4 space-y-1.5 animate-fade-in ${
-            isAuctionTab
-              ? 'bg-stroom-cardDark border-stroom-borderDark text-white'
-              : 'bg-stroom-ivory border-stroom-borderLight text-stroom-black'
-          }`}
-        >
+        <div className="xl:hidden border-t px-4 py-4 space-y-1.5 animate-fade-in bg-stroom-ivory border-stroom-borderLight text-stroom-black">
           <button
             onClick={() => {
               onSelectTab('landing');
@@ -446,21 +397,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="pt-2 border-t border-stone-200 dark:border-stone-800 space-y-1.5">
             <button
               onClick={() => {
-                onSelectTab('auction');
-                setMobileMenuOpen(false);
-              }}
-              className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
-                currentTab === 'auction'
-                  ? 'bg-stroom-orange text-white shadow-brand'
-                  : 'bg-stroom-black text-stroom-cream hover:bg-stone-800'
-              }`}
-            >
-              <Trophy className="w-4 h-4 text-stroom-orange" />
-              <span>Live Cricket Auction Arena</span>
-            </button>
-
-            <button
-              onClick={() => {
                 onSelectTab('participant');
                 setMobileMenuOpen(false);
               }}
@@ -482,7 +418,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`w-full text-left p-2.5 rounded-xl text-xs font-black flex items-center gap-2.5 transition-all ${
                 currentTab === 'partner'
                   ? 'bg-stroom-orange text-white shadow-brand'
-                : 'hover:bg-stroom-cream/60'
+                  : 'hover:bg-stroom-cream/60'
               }`}
             >
               <Building2 className="w-4 h-4" />

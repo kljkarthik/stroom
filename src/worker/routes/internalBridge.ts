@@ -7,8 +7,6 @@ export const VALID_ROLES = [
   'admin',
   'platform_admin',
   'event_manager',
-  'auctioneer',
-  'auction_manager',
   'community_manager',
   'partner_manager',
   'checkin_staff',

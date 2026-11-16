@@ -167,7 +167,7 @@ export const PartnerWithUsPage: React.FC<PartnerWithUsPageProps> = ({
             <Trophy className="w-6 h-6 text-stroom-orange flex-shrink-0" />
             <div>
               <h4 className="text-sm font-black text-stroom-black">Sports Turfs & Arenas</h4>
-              <p className="text-xs text-stone-500 mt-1">Box cricket auctions, pickleball tournaments, and badminton meets.</p>
+              <p className="text-xs text-stone-500 mt-1">Box cricket leagues, pickleball tournaments, and badminton meets.</p>
             </div>
           </div>
 
@@ -338,7 +338,7 @@ export const PartnerWithUsPage: React.FC<PartnerWithUsPageProps> = ({
                       <option value="Screening / Watch Party">Screening / Watch Party</option>
                       <option value="Board Games / Trivia">Board Games / Trivia</option>
                       <option value="Creative Workshop">Creative Workshop</option>
-                      <option value="Flagship Cricket Auction">Flagship Cricket Auction</option>
+                      <option value="Flagship Sports Tournament">Flagship Sports Tournament</option>
                     </select>
                   </div>
 

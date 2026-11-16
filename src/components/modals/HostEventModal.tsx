@@ -27,7 +27,7 @@ interface HostEventModalProps {
 export const HostEventModal: React.FC<HostEventModalProps> = ({ isOpen, onClose }) => {
   const [formData, setFormData] = useState({
     title: '',
-    category: 'Cricket Auction',
+    category: 'Sports & Turf League',
     city: 'Hyderabad',
     expectedAttendees: 30,
     preferredDate: '',
@@ -141,7 +141,6 @@ export const HostEventModal: React.FC<HostEventModalProps> = ({ isOpen, onClose 
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full px-3 py-2.5 rounded-xl bg-white border border-stroom-borderLight focus:border-stroom-orange text-sm font-semibold outline-none"
                   >
-                    <option value="Cricket Auction">Cricket Auction</option>
                     <option value="Sports & Turf League">Sports & Turf League</option>
                     <option value="Board Games & Gaming">Board Games & Gaming</option>
                     <option value="Cafe Meetup">Cafe Meetup</option>

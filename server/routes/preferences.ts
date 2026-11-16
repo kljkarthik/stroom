@@ -777,7 +777,7 @@ router.put('/admin/members/:id/role', requireAuth, requirePermission('roles.assi
     const { id } = req.params;
     const { role } = req.body;
 
-    const validRoles = ['super_admin', 'admin', 'platform_admin', 'event_manager', 'auctioneer', 'auction_manager', 'community_manager', 'partner_manager', 'checkin_staff', 'support_staff', 'venue_partner', 'participant', 'user'];
+    const validRoles = ['super_admin', 'admin', 'platform_admin', 'event_manager', 'community_manager', 'partner_manager', 'checkin_staff', 'support_staff', 'venue_partner', 'participant', 'user'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: 'Invalid user role' });
     }

@@ -1,73 +1,109 @@
 import React from 'react';
-import { Home, Trophy, Ticket, Compass, Users } from 'lucide-react';
+import { Home, Compass, Calendar, Users, User } from 'lucide-react';
 import { ActiveTab } from './Navbar';
+import { useAuth } from '../../context/AuthContext';
 
 interface BottomNavProps {
   currentTab: ActiveTab;
   onSelectTab: (tab: ActiveTab) => void;
-  onTriggerQuiz: () => void;
+  onTriggerQuiz?: () => void;
+  onOpenAuth?: () => void;
 }
 
-export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab }) => {
-  const isAuction = currentTab === 'auction';
+export const BottomNav: React.FC<BottomNavProps> = ({
+  currentTab,
+  onSelectTab,
+  onOpenAuth,
+}) => {
+  const { user, isAuthenticated } = useAuth();
+
+  const handleProfileClick = () => {
+    if (isAuthenticated) {
+      onSelectTab('participant');
+    } else if (onOpenAuth) {
+      onOpenAuth();
+    } else {
+      onSelectTab('participant');
+    }
+  };
 
   return (
-    <div
-      className={`fixed bottom-0 inset-x-0 z-40 xl:hidden border-t px-2 py-1.5 flex items-center justify-around transition-colors ${
-        isAuction
-          ? 'bg-stroom-black/95 border-stroom-borderDark text-white backdrop-blur-lg'
-          : 'bg-white/95 border-stroom-borderLight text-stroom-black backdrop-blur-lg'
-      }`}
+    <nav
+      aria-label="Mobile Navigation"
+      className="fixed bottom-0 inset-x-0 z-40 xl:hidden border-t px-1 py-1 flex items-center justify-around transition-colors bg-white/95 border-stroom-borderLight text-stroom-black backdrop-blur-lg shadow-lg"
     >
+      {/* 1. Home */}
       <button
+        type="button"
         onClick={() => onSelectTab('landing')}
-        className={`flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-extrabold transition-colors ${
-          currentTab === 'landing' ? 'text-stroom-orange' : 'text-stone-400'
+        className={`flex flex-col items-center py-1.5 px-2 rounded-xl text-[10px] font-extrabold transition-colors min-w-[56px] ${
+          currentTab === 'landing' ? 'text-stroom-orange' : 'text-stone-400 hover:text-stroom-black'
         }`}
       >
         <Home className="w-4 h-4 mb-0.5" />
         <span>Home</span>
       </button>
 
+      {/* 2. Discover */}
       <button
+        type="button"
         onClick={() => onSelectTab('discover')}
-        className={`flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-extrabold transition-colors ${
-          currentTab === 'discover' || currentTab === 'event_details' ? 'text-stroom-orange' : 'text-stone-400'
+        className={`flex flex-col items-center py-1.5 px-2 rounded-xl text-[10px] font-extrabold transition-colors min-w-[56px] ${
+          currentTab === 'discover' ? 'text-stroom-orange' : 'text-stone-400 hover:text-stroom-black'
         }`}
       >
         <Compass className="w-4 h-4 mb-0.5" />
         <span>Discover</span>
       </button>
 
+      {/* 3. Events */}
       <button
-        onClick={() => onSelectTab('auction')}
-        className={`flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-extrabold transition-colors ${
-          currentTab === 'auction' ? 'text-stroom-orange' : 'text-stone-400'
+        type="button"
+        onClick={() => onSelectTab('discover')}
+        className={`flex flex-col items-center py-1.5 px-2 rounded-xl text-[10px] font-extrabold transition-colors min-w-[56px] ${
+          currentTab === 'event_details' ? 'text-stroom-orange' : 'text-stone-400 hover:text-stroom-black'
         }`}
       >
-        <Trophy className="w-4 h-4 mb-0.5" />
-        <span>Auction</span>
+        <Calendar className="w-4 h-4 mb-0.5" />
+        <span>Events</span>
       </button>
 
+      {/* 4. Communities */}
       <button
+        type="button"
         onClick={() => onSelectTab('communities')}
-        className={`flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-extrabold transition-colors ${
-          currentTab === 'communities' || currentTab === 'community_details' ? 'text-stroom-orange' : 'text-stone-400'
+        className={`flex flex-col items-center py-1.5 px-2 rounded-xl text-[10px] font-extrabold transition-colors min-w-[56px] ${
+          currentTab === 'communities' || currentTab === 'community_details'
+            ? 'text-stroom-orange'
+            : 'text-stone-400 hover:text-stroom-black'
         }`}
       >
         <Users className="w-4 h-4 mb-0.5" />
         <span>Communities</span>
       </button>
 
+      {/* 5. Profile */}
       <button
-        onClick={() => onSelectTab('participant')}
-        className={`flex flex-col items-center py-1 px-2 rounded-xl text-[10px] font-extrabold transition-colors ${
-          currentTab === 'participant' ? 'text-stroom-orange' : 'text-stone-400'
+        type="button"
+        onClick={handleProfileClick}
+        className={`flex flex-col items-center py-1.5 px-2 rounded-xl text-[10px] font-extrabold transition-colors min-w-[56px] ${
+          currentTab === 'participant' ? 'text-stroom-orange' : 'text-stone-400 hover:text-stroom-black'
         }`}
       >
-        <Ticket className="w-4 h-4 mb-0.5" />
-        <span>Passes</span>
+        {isAuthenticated && user?.avatar_url ? (
+          <img
+            src={user.avatar_url}
+            alt={user.full_name || 'Profile'}
+            className={`w-4 h-4 mb-0.5 rounded-full object-cover border ${
+              currentTab === 'participant' ? 'border-stroom-orange' : 'border-stone-300'
+            }`}
+          />
+        ) : (
+          <User className="w-4 h-4 mb-0.5" />
+        )}
+        <span>Profile</span>
       </button>
-    </div>
+    </nav>
   );
 };
+export default BottomNav;

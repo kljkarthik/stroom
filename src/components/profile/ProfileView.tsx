@@ -180,7 +180,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onRetakeQuiz }) => {
             value={newTagInput}
             onChange={(e) => setNewTagInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
-            placeholder="e.g. cricket_auctions, cafe_hopping, futsal"
+            placeholder="e.g. box_cricket, cafe_hopping, futsal"
             className="flex-1 px-3.5 py-2.5 bg-stroom-ivory border border-stroom-borderLight rounded-xl text-xs font-semibold text-stroom-black placeholder-stone-400 focus:outline-none focus:border-stroom-orange"
           />
           <button

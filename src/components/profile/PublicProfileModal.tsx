@@ -222,9 +222,7 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
                         className="p-3 rounded-2xl bg-stroom-ivory border border-stroom-borderLight flex items-center gap-3"
                       >
                         <div className="w-10 h-10 rounded-xl bg-white border border-stroom-gold/40 flex items-center justify-center text-stroom-gold shrink-0 shadow-xs">
-                          {stamp.category?.includes('auction') ? (
-                            <Trophy className="w-5 h-5 text-stroom-orange" />
-                          ) : stamp.category?.includes('sport') ? (
+                          {stamp.category?.includes('sport') ? (
                             <Flame className="w-5 h-5 text-stroom-deep" />
                           ) : stamp.category?.includes('cafe') ? (
                             <Coffee className="w-5 h-5 text-amber-600" />

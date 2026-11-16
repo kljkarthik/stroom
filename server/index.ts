@@ -12,7 +12,6 @@ import discoveryRouter from './routes/discovery';
 import preferencesRouter from './routes/preferences';
 import adminRouter from './routes/admin';
 import eventsRouter from './routes/events';
-import auctionRouter from './routes/auction';
 import passesRouter from './routes/passes';
 import partnersRouter from './routes/partners';
 import communitiesRouter from './routes/communities';
@@ -60,7 +59,7 @@ app.get('/api/health', async (req, res) => {
     }
     return res.json({
       status: 'ok',
-      app: 'STROOM Auction Hub & Social Discovery API',
+      app: 'STROOM Event Discovery & Community Platform API',
       version: '2.0.0',
       environment: config.nodeEnv,
       database: 'connected',
@@ -89,12 +88,18 @@ app.use('/api/discovery', discoveryRouter);
 app.use('/api/users', preferencesRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/events', eventsRouter);
-app.use('/api/auctions', auctionRouter);
 app.use('/api/passes', passesRouter);
 app.use('/api/partners', partnersRouter);
 app.use('/api/communities', communitiesRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/upload', uploadRouter);
+
+// Decommissioned Auction Arena route handler
+app.use('/api/auctions', (req, res) => {
+  return res.status(404).json({
+    error: 'Auction Arena has been decommissioned. Please visit /api/events for active experiences.',
+  });
+});
 
 // Serve static frontend in production
 const clientDistPath = path.resolve(process.cwd(), 'dist');

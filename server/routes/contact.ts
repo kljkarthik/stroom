@@ -67,12 +67,12 @@ router.get('/faqs', (req, res) => {
         {
           id: 'faq_1',
           question: 'What is STROOM and how does it work?',
-          answer: 'STROOM (Strangers Room) is a social discovery and real-world community platform. We curate themed group experiences — like live cricket player auctions, box cricket leagues, board game nights, and café meetups — specifically designed for strangers to connect comfortably without superficial awkwardness.'
+          answer: 'STROOM (Strangers Room) is a social discovery and real-world community platform. We curate themed group experiences — like turf sports leagues, board game nights, cultural workshops, and café meetups — specifically designed for strangers to connect comfortably without superficial awkwardness.'
         },
         {
           id: 'faq_2',
           question: 'Can I come alone to a STROOM event?',
-          answer: 'Yes! In fact, over 80% of STROOM participants attend solo. Every event is structured with natural icebreakers, team draft allocations, and friendly hosts so you walk in as a stranger and walk out with a squad.'
+          answer: 'Yes! In fact, over 80% of STROOM participants attend solo. Every event is structured with natural icebreakers, team allocations, and friendly hosts so you walk in as a stranger and walk out with a squad.'
         },
         {
           id: 'faq_3',
@@ -82,17 +82,17 @@ router.get('/faqs', (req, res) => {
       ]
     },
     {
-      category: 'Events & Cricket Auctions',
+      category: 'Events & Experiences',
       items: [
         {
           id: 'faq_4',
-          question: 'What is the STROOM Live Cricket Auction?',
-          answer: 'Our signature entertainment event! Participants are seated at franchise bidder tables or enter the player pool. Using real auction paddles and a virtual budget of ₹10 Crores, tables bid in real time to assemble their 15-player squad before facing off in weekend turf matches.'
+          question: 'What types of events does STROOM host?',
+          answer: 'STROOM hosts a diverse range of offline experiences including turf sports, box cricket, board gaming, book clubs, specialty coffee cupping, tech roundtables, and creative art sessions.'
         },
         {
           id: 'faq_5',
-          question: 'Is real money gambled during the cricket auction?',
-          answer: 'No. STROOM is strictly a social community and entertainment platform. All auction budgets (e.g. ₹10 Crores) are 100% virtual fantasy currency. There is zero betting or gambling.'
+          question: 'How do group formations work at events?',
+          answer: 'Hosts facilitate structured group activities, team rotations, and casual mixers to ensure everyone gets to interact with multiple members in a welcoming and pressure-free environment.'
         },
         {
           id: 'faq_6',
@@ -112,7 +112,7 @@ router.get('/faqs', (req, res) => {
         {
           id: 'faq_8',
           question: 'What happens at door check-in?',
-          answer: 'Our reception staff scans your digital QR pass at the entrance. Your pass is verified against the live database, stamped into your STROOM Passport, and you receive your welcome team badge or table paddle.'
+          answer: 'Our reception staff scans your digital QR pass at the entrance. Your pass is verified against the live database, stamped into your STROOM Passport, and you receive your welcome team badge or event kit.'
         }
       ]
     },
@@ -122,7 +122,7 @@ router.get('/faqs', (req, res) => {
         {
           id: 'faq_9',
           question: 'Are there free events on STROOM?',
-          answer: 'Yes! Many of our café mixers, book exchanges, acoustic jams, and tech roundtables are completely free to attend. Sports turfs and flagship auctions have a nominal pass fee that covers venue slot hire, equipment, and welcome beverages.'
+          answer: 'Yes! Many of our café mixers, book exchanges, acoustic jams, and tech roundtables are completely free to attend. Sports turfs and curated flagship events have a nominal pass fee that covers venue slot hire, equipment, and welcome beverages.'
         },
         {
           id: 'faq_10',
@@ -152,7 +152,7 @@ router.get('/faqs', (req, res) => {
         {
           id: 'faq_13',
           question: 'How can cafes, turfs, and lounges partner with STROOM?',
-          answer: 'We collaborate with verified local venues to host regular community meetups and auctions. We bring organized, courteous groups during off-peak and weekend slots. You can apply via our "Partner With Us" portal.'
+          answer: 'We collaborate with verified local venues to host regular community meetups and curated gatherings. We bring organized, courteous groups during off-peak and weekend slots. You can apply via our "Partner With Us" portal.'
         }
       ]
     }

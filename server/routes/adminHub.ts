@@ -44,7 +44,7 @@ router.get('/global-search', requirePermission('overview.view'), async (req: Aut
     const adapter = getDatabaseAdapter();
     const q = String(req.query.q || '').trim();
     if (!q || q.length < 2) {
-      return res.json({ success: true, results: { members: [], events: [], communities: [], partners: [], venues: [], auctions: [] } });
+      return res.json({ success: true, results: { members: [], events: [], communities: [], partners: [], venues: [] } });
     }
     const like = `%${q}%`;
     const role = req.user!.role;
@@ -74,13 +74,9 @@ router.get('/global-search', requirePermission('overview.view'), async (req: Aut
       ? await adapter.query(`SELECT id, name, area, is_verified FROM venues WHERE name LIKE ? OR area LIKE ? LIMIT 6`, [like, like])
       : [];
 
-    const auctions = hasPermission(role, 'auctions.view')
-      ? await adapter.query(`SELECT id, title, status FROM auction_rooms WHERE title LIKE ? LIMIT 6`, [like])
-      : [];
-
     return res.json({
       success: true,
-      results: { members, events, communities, partners, venues, auctions },
+      results: { members, events, communities, partners, venues },
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -115,7 +111,6 @@ router.get('/dashboard-overview', requirePermission('overview.view'), async (req
     const verifiedPartners = (await adapter.queryOne("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status = 'Verified'") as any).c;
     const pendingPartnersCount = (await adapter.queryOne("SELECT COUNT(*) as c FROM partner_accounts WHERE verification_status IN ('Submitted', 'Under Review')") as any).c;
     const activeVenues = (await adapter.queryOne('SELECT COUNT(*) as c FROM venues WHERE is_verified = 1') as any).c;
-    const liveAuctions = (await adapter.queryOne("SELECT COUNT(*) as c FROM auction_rooms WHERE status = 'LIVE'") as any).c;
 
     const recentRegistrations = await adapter.query(`
       SELECT r.id, r.pass_code, r.checkin_status, r.created_at, u.full_name as member_name, e.title as event_title
@@ -170,16 +165,6 @@ router.get('/dashboard-overview', requirePermission('overview.view'), async (req
       LIMIT 5
     `);
 
-    const recentAuctionActivity = await adapter.query(`
-      SELECT b.id, b.amount, b.placed_at, a.title as auction_title, p.name as player_name, t.name as team_name
-      FROM bids b
-      JOIN auction_rooms a ON b.auction_id = a.id
-      JOIN auction_players p ON b.player_id = p.id
-      JOIN auction_teams t ON b.team_id = t.id
-      ORDER BY b.placed_at DESC
-      LIMIT 5
-    `);
-
     const reportedPostsCount = (await adapter.queryOne("SELECT COUNT(*) as c FROM community_posts WHERE status IN ('Reported', 'Pending')") as any).c;
     const pendingCampaignsCount = (await adapter.queryOne("SELECT COUNT(*) as c FROM coupons WHERE approval_status = 'Submitted'") as any).c;
 
@@ -224,7 +209,6 @@ router.get('/dashboard-overview', requirePermission('overview.view'), async (req
         verifiedPartners,
         pendingPartners: pendingPartnersCount,
         activeVenues,
-        liveAuctions,
       },
       activity: {
         recentRegistrations,
@@ -233,7 +217,6 @@ router.get('/dashboard-overview', requirePermission('overview.view'), async (req
         recentCheckins,
         partnerApplications,
         pendingCollaborations,
-        recentAuctionActivity,
         systemAlerts,
       },
     });
@@ -247,8 +230,8 @@ function formatCategoryLabel(raw: string): string {
   const key = (raw || 'other').toLowerCase();
   const map: Record<string, string> = {
     cricket: 'Cricket & Sports',
-    cricket_auction: 'Cricket & Auctions',
-    auction: 'Cricket Auctions',
+    cricket_auction: 'Cricket & Sports',
+    auction: 'Cricket & Sports',
     sports: 'Cricket & Sports',
     gaming: 'Gaming',
     cafe: 'Café Meetups',
@@ -814,7 +797,6 @@ async function inspectEventDependencies(eventId: string) {
   const checkedInCount = Number((await adapter.queryOne("SELECT COUNT(*) as c FROM event_registrations WHERE event_id = ? AND checkin_status = 'checked_in'", [eventId]) as any)?.c || 0);
   const attendanceStamps = Number((await adapter.queryOne('SELECT COUNT(*) as c FROM passport_stamps WHERE event_id = ?', [eventId]) as any)?.c || 0);
   const paymentsCount = Number((await adapter.queryOne('SELECT COUNT(*) as c FROM payment_transactions WHERE event_id = ?', [eventId]) as any)?.c || 0);
-  const auctionsCount = Number((await adapter.queryOne('SELECT COUNT(*) as c FROM auction_rooms WHERE event_id = ?', [eventId]) as any)?.c || 0);
   const collaborationsCount = Number((await adapter.queryOne('SELECT COUNT(*) as c FROM partner_collaborations WHERE event_id = ?', [eventId]) as any)?.c || 0);
   const venueBookingsCount = Number((await adapter.queryOne("SELECT COUNT(*) as c FROM venue_availability WHERE event_id = ? AND status = 'booked'", [eventId]) as any)?.c || 0);
 
@@ -823,7 +805,6 @@ async function inspectEventDependencies(eventId: string) {
     checkedInCount > 0 ||
     attendanceStamps > 0 ||
     paymentsCount > 0 ||
-    auctionsCount > 0 ||
     collaborationsCount > 0 ||
     venueBookingsCount > 0;
 
@@ -833,7 +814,6 @@ async function inspectEventDependencies(eventId: string) {
     checkedInCount,
     attendanceStamps,
     paymentsCount,
-    auctionsCount,
     collaborationsCount,
     venueBookingsCount,
     hasProtectedDependencies,
@@ -909,7 +889,7 @@ router.delete('/events/:id', requirePermission('events.delete'), async (req: Aut
         result: 'denied',
       });
       return res.status(409).json({
-        error: 'Cannot permanently delete an event with associated registrations, attendance records, payments, or auction/partner history. Use Archive Event or Cancel Event instead.',
+        error: 'Cannot permanently delete an event with associated registrations, attendance records, payments, or partner history. Use Archive Event or Cancel Event instead.',
         dependencies,
       });
     }
@@ -1563,97 +1543,7 @@ router.get('/communities/:id/members', requirePermission('communities.manage'), 
 });
 
 // =========================================================================
-// 5. CENTRALIZED AUCTION MANAGEMENT & LIVE MONITOR
-// =========================================================================
-
-router.get('/auctions', requirePermission('auctions.view'), async (req: AuthRequest, res: Response) => {
-  try {
-    const adapter = getDatabaseAdapter();
-    const auctions = await adapter.query(`
-      SELECT
-        a.*,
-        e.title as event_title,
-        e.event_date,
-        c.name as city_name,
-        v.name as venue_name,
-        cp.name as current_player_name,
-        cp.current_bid as current_player_bid,
-        (SELECT COUNT(*) FROM auction_teams WHERE auction_id = a.id) as teams_count,
-        (SELECT COUNT(*) FROM auction_players WHERE auction_id = a.id) as total_lots,
-        (SELECT COUNT(*) FROM auction_players WHERE auction_id = a.id AND status = 'SOLD') as sold_lots,
-        (SELECT COUNT(*) FROM auction_players WHERE auction_id = a.id AND status = 'UNSOLD') as unsold_lots,
-        (SELECT COUNT(*) FROM auction_registrations WHERE auction_id = a.id) as registered_participants
-      FROM auction_rooms a
-      JOIN events e ON a.event_id = e.id
-      JOIN cities c ON e.city_id = c.id
-      JOIN venues v ON e.venue_id = v.id
-      LEFT JOIN auction_players cp ON a.current_player_id = cp.id
-      ORDER BY CASE a.status WHEN 'LIVE' THEN 1 WHEN 'PAUSED' THEN 2 WHEN 'SCHEDULED' THEN 3 ELSE 4 END, a.created_at DESC
-    `);
-
-    const recentBids = await adapter.query(`
-      SELECT b.id, b.auction_id, b.amount, b.placed_at, p.name as player_name, t.name as team_name, a.title as auction_title
-      FROM bids b
-      JOIN auction_players p ON b.player_id = p.id
-      JOIN auction_teams t ON b.team_id = t.id
-      JOIN auction_rooms a ON b.auction_id = a.id
-      ORDER BY b.placed_at DESC
-      LIMIT 12
-    `);
-
-    return res.json({ success: true, auctions, recentBids });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/auctions', requirePermission('auctions.manage'), async (req: AuthRequest, res: Response) => {
-  try {
-    const adapter = getDatabaseAdapter();
-    const { event_id, title, format_type, format_category, team_purse_cap, min_bid_increment, max_squad_size, overseas_limit, countdown_seconds } = req.body;
-    if (!event_id || !title) return res.status(400).json({ error: 'event_id and title are required' });
-
-    const existing = await adapter.queryOne('SELECT id FROM auction_rooms WHERE event_id = ?', [event_id]);
-    if (existing) return res.status(409).json({ error: 'An auction room already exists for this event.' });
-
-    const id = 'auc_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-    await adapter.execute(`
-      INSERT INTO auction_rooms (
-        id, event_id, title, format_type, format_category, status,
-        countdown_seconds, auto_extend_seconds, min_bid_increment,
-        max_squad_size, min_squad_size, team_purse_cap, overseas_limit
-      )
-      VALUES (?, ?, ?, ?, ?, 'SCHEDULED', ?, 15, ?, ?, 5, ?, ?)
-    `, [id,
-      event_id,
-      title.trim(),
-      format_type || 'stroom_premier',
-      format_category || 'ipl_mock',
-      Number(countdown_seconds) || 15,
-      Number(min_bid_increment) || 25000,
-      Number(max_squad_size) || 15,
-      Number(team_purse_cap) || 10000000,
-      Number(overseas_limit) || 4]);
-
-    const auction = await adapter.queryOne('SELECT * FROM auction_rooms WHERE id = ?', [id]);
-    await recordAuditLog({
-      actorId: req.user!.id,
-      actorName: req.user!.full_name,
-      actorRole: req.user!.role,
-      action: 'AUCTION_CREATED',
-      entityType: 'auction',
-      entityId: id,
-      afterData: { title, event_id, format_type },
-    });
-
-    return res.status(201).json({ success: true, auction });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// =========================================================================
-// 6. CENTRALIZED VENUE MANAGEMENT
+// 5. CENTRALIZED VENUE MANAGEMENT
 // =========================================================================
 
 router.get('/venues', requirePermission('venues.manage'), async (req: AuthRequest, res: Response) => {
@@ -1827,7 +1717,7 @@ router.post('/checkin/scan', requirePermission('checkin.access'), async (req: Au
     }
 
     const stampId = 'stamp_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-    const stampIcon = pass.event_category?.includes('auction') ? 'Trophy' : pass.event_category?.includes('sport') ? 'Activity' : 'Award';
+    const stampIcon = pass.event_category?.includes('sport') ? 'Activity' : 'Award';
 
     await adapter.transaction(async (tx) => {
       await tx.execute(`
@@ -2295,15 +2185,6 @@ router.get('/reports/export', requirePermission('analytics.view'), async (req: A
       headers = ['Coupon Code', 'Title', 'Offer Value', 'Approval Status', 'Actual Redemptions', 'Max Redemptions', 'Valid Until'];
       const data = await adapter.query('SELECT code, title, discount_value, approval_status, actual_redemptions, max_redemptions, valid_until FROM coupons') as any[];
       rows = data.map((r) => [esc(r.code), esc(r.title), esc(r.discount_value), esc(r.approval_status), esc(r.actual_redemptions), esc(r.max_redemptions), esc(r.valid_until)].join(','));
-    } else if (type === 'auctions') {
-      headers = ['Auction ID', 'Title', 'Format', 'Status', 'Total Teams', 'Sold Players'];
-      const data = await adapter.query(`
-        SELECT a.id, a.title, a.format_type, a.status,
-          (SELECT COUNT(*) FROM auction_teams WHERE auction_id = a.id) as teams,
-          (SELECT COUNT(*) FROM auction_players WHERE auction_id = a.id AND status = 'SOLD') as sold
-        FROM auction_rooms a
-      `) as any[];
-      rows = data.map((r) => [esc(r.id), esc(r.title), esc(r.format_type), esc(r.status), esc(r.teams), esc(r.sold)].join(','));
     } else {
       headers = ['Event ID', 'Title', 'Category', 'Date', 'Status', 'Capacity', 'Confirmed', 'Verified Check-Ins'];
       const data = await adapter.query(`

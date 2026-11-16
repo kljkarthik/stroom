@@ -42,7 +42,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart, onSkip, i
           <div className="absolute bottom-3 left-3 right-3 flex flex-wrap gap-1.5">
             <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-xl text-[11px] font-extrabold text-white border border-white/20">
               <Trophy className="w-3 h-3 text-stroom-orange" />
-              <span>Cricket Auctions</span>
+              <span>Turf Sports</span>
             </span>
             <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-xl text-[11px] font-extrabold text-white border border-white/20">
               <Users className="w-3 h-3 text-stroom-cream" />
@@ -65,7 +65,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStart, onSkip, i
             <span className="text-stroom-orange">Stories Tomorrow.</span>
           </h2>
           <p className="text-xs sm:text-sm text-stroom-charcoal/80 mt-2 leading-relaxed">
-            Answer 4 quick vibe questions to personalize your auction table recommendations, sports leagues, and weekend cafe mixers.
+            Answer 4 quick vibe questions to personalize your sports leagues, creative workshops, and weekend cafe mixers.
           </p>
 
           <div className="mt-4 pt-3 border-t border-stroom-borderLight flex items-center justify-between text-[11px] text-stroom-charcoal/70">
