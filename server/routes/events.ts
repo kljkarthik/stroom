@@ -3,8 +3,116 @@ import crypto from 'crypto';
 import { getDatabaseAdapter } from '../db/adapter';
 import { requireAuth, requirePermission, AuthRequest, optionalAuth } from '../middleware/auth';
 import { Event, City, EventRegistration } from '../types';
+import { validateSafeMediaUrl, sendSafeServerError } from '../services/securityService';
 
 const router = Router();
+
+// 0. POST Submit Event Proposal (Public / Community Member)
+router.post(['/submit-proposal', '/submit'], optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const adapter = getDatabaseAdapter();
+    const {
+      organizer_name,
+      organizer_email,
+      organizer_phone,
+      organization_name,
+      title,
+      category,
+      short_description,
+      detailed_description,
+      format,
+      city,
+      venue,
+      proposed_date,
+      start_time,
+      end_time,
+      expected_capacity,
+      age_group,
+      cover_image_url,
+      additional_images_json,
+      estimated_budget,
+      ticketing_details,
+      sponsorship_requirements,
+      additional_notes
+    } = req.body;
+
+    if (!organizer_name?.trim() || !organizer_email?.trim() || !organizer_phone?.trim()) {
+      return res.status(400).json({ error: 'Organizer name, email, and phone number are required.' });
+    }
+    if (!title?.trim() || !category?.trim() || !short_description?.trim() || !detailed_description?.trim()) {
+      return res.status(400).json({ error: 'Event title, category, short summary, and detailed description are required.' });
+    }
+    if (!city?.trim() || !proposed_date?.trim() || !start_time?.trim()) {
+      return res.status(400).json({ error: 'City, proposed date, and start time are required.' });
+    }
+    const capacityNum = parseInt(expected_capacity, 10);
+    if (isNaN(capacityNum) || capacityNum <= 0) {
+      return res.status(400).json({ error: 'Expected capacity must be a positive number.' });
+    }
+
+    if (cover_image_url) {
+      const coverCheck = validateSafeMediaUrl(cover_image_url, 'Cover Image');
+      if (!coverCheck.valid) {
+        return res.status(400).json({ error: coverCheck.error });
+      }
+    }
+
+    let serializedAdditionalImages: string | null = null;
+    if (additional_images_json) {
+      if (typeof additional_images_json === 'string') {
+        serializedAdditionalImages = additional_images_json;
+      } else if (Array.isArray(additional_images_json)) {
+        serializedAdditionalImages = JSON.stringify(additional_images_json);
+      }
+    }
+
+    const submissionId = `SUB-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    const userId = req.user?.id || null;
+
+    await adapter.execute(`
+      INSERT INTO event_submissions (
+        id, user_id, organizer_name, organizer_email, organizer_phone, organization_name,
+        title, category, short_description, detailed_description, format,
+        city, venue, proposed_date, start_time, end_time, expected_capacity,
+        age_group, cover_image_url, additional_images_json, estimated_budget,
+        ticketing_details, sponsorship_requirements, additional_notes, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+    `, [
+      submissionId,
+      userId,
+      organizer_name.trim(),
+      organizer_email.trim(),
+      organizer_phone.trim(),
+      organization_name?.trim() || null,
+      title.trim(),
+      category.trim(),
+      short_description.trim(),
+      detailed_description.trim(),
+      format?.trim() || 'Physical',
+      city.trim(),
+      venue?.trim() || null,
+      proposed_date.trim(),
+      start_time.trim(),
+      end_time?.trim() || null,
+      capacityNum,
+      age_group?.trim() || null,
+      cover_image_url?.trim() || null,
+      serializedAdditionalImages,
+      estimated_budget?.trim() || null,
+      ticketing_details?.trim() || null,
+      sponsorship_requirements?.trim() || null,
+      additional_notes?.trim() || null
+    ]);
+
+    return res.status(201).json({
+      success: true,
+      submissionId,
+      message: 'Your event proposal has been submitted successfully! Our curation team will review it and get in touch with you.'
+    });
+  } catch (err: any) {
+    return sendSafeServerError(res, err, 'Failed to submit event proposal.');
+  }
+});
 
 // 1. GET all launch cities
 router.get('/cities', async (req, res) => {

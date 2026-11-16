@@ -2,6 +2,7 @@ import React from 'react';
 import { Home, Compass, Calendar, Users, User } from 'lucide-react';
 import { ActiveTab } from './Navbar';
 import { useAuth } from '../../context/AuthContext';
+import { isUploadedPhoto } from '../../utils/avatarUtils';
 
 interface BottomNavProps {
   currentTab: ActiveTab;
@@ -90,16 +91,18 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           currentTab === 'participant' ? 'text-stroom-orange' : 'text-stone-400 hover:text-stroom-black'
         }`}
       >
-        {isAuthenticated && user?.avatar_url ? (
+        {isAuthenticated && isUploadedPhoto(user?.avatar_url) ? (
           <img
-            src={user.avatar_url}
-            alt={user.full_name || 'Profile'}
+            src={user!.avatar_url!}
+            alt={user?.full_name || 'Profile'}
             className={`w-4 h-4 mb-0.5 rounded-full object-cover border ${
               currentTab === 'participant' ? 'border-stroom-orange' : 'border-stone-300'
             }`}
           />
         ) : (
-          <User className="w-4 h-4 mb-0.5" />
+          <div className="w-4 h-4 mb-0.5 rounded-full bg-stone-900 text-stone-300 flex items-center justify-center">
+            <User className="w-2.5 h-2.5" />
+          </div>
         )}
         <span>Profile</span>
       </button>

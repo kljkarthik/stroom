@@ -31,8 +31,10 @@ import {
   AlertCircle,
   Filter,
   Check,
-  Coffee
+  Coffee,
+  User
 } from 'lucide-react';
+import { isUploadedPhoto } from '../../utils/avatarUtils';
 
 interface ParticipantDashboardProps {
   onExploreEvents?: () => void;
@@ -152,11 +154,11 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
             {/* Profile Avatar with completion ring */}
             <div className="relative">
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-tr from-stroom-orange to-stroom-gold p-1 shadow-brand overflow-hidden shrink-0">
-                {member?.avatar_url ? (
+                {isUploadedPhoto(member?.avatar_url) ? (
                   <img src={member.avatar_url} alt={displayName} className="w-full h-full rounded-2xl object-cover" />
                 ) : (
-                  <div className="w-full h-full rounded-2xl bg-stroom-charcoal flex items-center justify-center text-white font-black text-3xl">
-                    {displayName.charAt(0)}
+                  <div className="w-full h-full rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-400">
+                    <User className="w-10 h-10" />
                   </div>
                 )}
               </div>
@@ -541,7 +543,7 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
                       No Upcoming Events
                     </h4>
                     <p className="text-xs text-stroom-charcoal/80 max-w-sm mx-auto">
-                      You are not registered for any upcoming events. Join an IPL mock draft or coffee meetup in your city.
+                      You are not registered for any upcoming events. Explore curated experiences or coffee meetups in your city.
                     </p>
                     {onExploreEvents && (
                       <button

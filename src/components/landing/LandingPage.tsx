@@ -4,6 +4,7 @@ import { RegistrationModal, EventDetails } from '../modals/RegistrationModal';
 import { PartnerProposalModal } from '../modals/PartnerProposalModal';
 import { HostEventModal } from '../modals/HostEventModal';
 import { api } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import {
   Users,
   Target,
@@ -50,6 +51,7 @@ interface LandingPageProps {
   onGoToPartnerWithUs?: () => void;
   onGoToContact?: () => void;
   onGoToFaqs?: () => void;
+  onOpenAuth?: (eventId?: string) => void;
 }
 
 // 10 Official Experience Categories
@@ -146,31 +148,6 @@ const EXPERIENCE_CATEGORIES = [
   },
 ];
 
-// Verified Community Stories (Genuine member perspectives)
-const COMMUNITY_STORIES = [
-  {
-    quote: "I moved to Hyderabad knowing zero people in Gachibowli. Registered for a STROOM box cricket match on a whim. Today, my teammates are my flatmates and best friends.",
-    author: "Karan Mehra",
-    role: "Product Designer • Hyderabad",
-    tag: "Cricket & Sports Member",
-    chapter: "Hyderabad Chapter",
-  },
-  {
-    quote: "The turf match and coffee mixer in Pune was more fun than any corporate mixer or dating app. The energy was electric, and everyone was genuinely open to meeting new people.",
-    author: "Sneha Sen",
-    role: "Marketing Strategist • Pune",
-    tag: "Social Mixer Member",
-    chapter: "Pune Chapter",
-  },
-  {
-    quote: "STROOM captures the rare magic of modern cities — giving strangers a safe, exciting reason to laugh, compete, and share stories together in real life.",
-    author: "Rishabh Goel",
-    role: "Software Architect • Bangalore",
-    tag: "Tech & Networking Circle",
-    chapter: "Bangalore Chapter",
-  },
-];
-
 // 6 Official Launch Cities
 const LAUNCH_CITIES = [
   {
@@ -258,7 +235,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onGoToPartnerWithUs,
   onGoToContact,
   onGoToFaqs,
+  onOpenAuth,
 }) => {
+  const { isAuthenticated } = useAuth();
   const [selectedEvent, setSelectedEvent] = useState<EventDetails | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
@@ -293,6 +272,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   }, [selectedCityId]);
 
   const handleRegisterEvent = (event: EventDetails) => {
+    if (!isAuthenticated) {
+      if (onOpenAuth) {
+        onOpenAuth(event.id);
+      } else if (onGoToAuth) {
+        onGoToAuth();
+      }
+      return;
+    }
     setSelectedEvent(event);
     setIsModalOpen(true);
   };
@@ -322,122 +309,89 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     <div className="min-h-screen bg-stroom-ivory text-stroom-black selection:bg-stroom-orange selection:text-white">
       
       {/* ==================================================
-          1. HERO SECTION — DISCOVER REAL-WORLD EXPERIENCES
+          1. HERO SECTION — IMMERSIVE EDITORIAL CINEMATIC HERO
           ================================================== */}
-      <section className="relative overflow-hidden pt-8 pb-16 sm:pb-24 border-b border-stroom-borderLight">
-        {/* Ambient Top Contours */}
-        <div className="absolute top-0 inset-x-0 h-48 bg-gradient-to-b from-stroom-cream/70 to-transparent pointer-events-none" />
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            
-            {/* Left Hero Text Content */}
-            <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-              
-              {/* Brand Logo & Subtitle */}
-              <div className="inline-flex flex-col items-center lg:items-start">
-                <StroomLogo variant="dark" size="xl" showSubtitle={true} />
-              </div>
+      <section className="relative overflow-hidden bg-stone-950 text-white min-h-[640px] sm:min-h-[740px] lg:min-h-[820px] flex items-center justify-center border-b border-stroom-borderDark">
+        {/* Immersive Full-Bleed Cinematic Background Photograph */}
+        <div className="absolute inset-0 pointer-events-none select-none overflow-hidden bg-stone-950">
+          <img
+            src="https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=2560&q=85"
+            alt="STROOM Community Meetups and Experiences"
+            className="w-full h-full object-cover object-[center_35%] filter brightness-[0.72] contrast-[1.08] animate-hero-bg"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
 
-              {/* Official Tagline Headline */}
-              <div className="pt-2">
-                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-stroom-black tracking-tight leading-none font-display">
-                  STRANGERS TODAY.
-                  <br />
-                  <span className="stroom-tagline-brush mt-2 inline-block">
-                    STORIES TOMORROW.
-                  </span>
-                </h1>
-              </div>
+        {/* Balanced Multi-Layered Dark & Amber Contrast Overlays */}
+        <div className="absolute inset-0 bg-gradient-to-b from-stone-950/85 via-stone-950/65 to-stone-950 pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-stroom-orange/15 via-transparent to-stone-950/90 pointer-events-none" />
 
-              {/* Supporting Text */}
-              <p className="text-base sm:text-lg text-stroom-charcoal/80 max-w-xl font-medium leading-relaxed">
-                Discover curated real-world experiences, meet like-minded people in your city, and turn shared passions into lifelong friendships.
-              </p>
+        {/* Oversized Low-Opacity Architectural Background Watermark */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden" aria-hidden="true">
+          <span className="text-[14vw] sm:text-[12vw] font-black uppercase tracking-tighter text-white/[0.035] leading-none whitespace-nowrap select-none">
+            STRANGERS TO STORIES
+          </span>
+        </div>
 
-              {/* Call to Actions (Primary: Explore Experiences, Secondary: Discover Communities) */}
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4 pt-2">
-                <button
-                  type="button"
-                  onClick={() => onGoToDiscover?.()}
-                  className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-extrabold text-sm sm:text-base shadow-brand hover:brightness-105 active:scale-[0.99] transition-all flex items-center gap-2"
-                >
-                  <Compass className="w-5 h-5" />
-                  <span>Explore Experiences</span>
-                  <ArrowRight className="w-4 h-4 ml-1" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onGoToCommunities ? onGoToCommunities() : onGoToDiscover?.()}
-                  className="px-6 py-3.5 rounded-2xl bg-white hover:bg-stroom-cream border-2 border-stroom-orange/30 text-stroom-black font-extrabold text-sm sm:text-base shadow-sm transition-all flex items-center gap-2"
-                >
-                  <Users className="w-5 h-5 text-stroom-orange" />
-                  <span>Discover Communities</span>
-                </button>
-              </div>
-
-              {/* Trust Badges */}
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-5 pt-3 text-xs font-bold text-stroom-charcoal/70">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-stroom-orange" /> Hyderabad Chapter Live
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-stroom-orange" /> Pune Chapter Live
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-stroom-orange" /> 100% Real Community Gatherings
-                </span>
-              </div>
-            </div>
-
-            {/* Right Hero Visual: Authentic Community Gathering Poster */}
-            <div className="lg:col-span-5 relative">
-              <div className="relative mx-auto max-w-md lg:max-w-none">
-                
-                {/* Decorative Ambient Glow */}
-                <div className="absolute -inset-4 bg-gradient-to-tr from-stroom-orange/30 to-stroom-gold/20 rounded-4xl filter blur-2xl opacity-70" />
-
-                {/* Main Framed Poster Image */}
-                <div className="relative rounded-3xl overflow-hidden border-4 border-white shadow-2xl bg-stroom-cream">
-                  <img
-                    src="/brand/stroom-community-hero.jpg"
-                    alt="STROOM Community Meetup & Social Gathering"
-                    className="w-full h-80 sm:h-96 object-cover hover:scale-105 transition-transform duration-700"
-                  />
-                  
-                  {/* Floating Live Badge */}
-                  <div className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-stroom-black/85 backdrop-blur-md text-white text-xs font-extrabold flex items-center gap-2 border border-stroom-orange/40 shadow">
-                    <span className="w-2 h-2 rounded-full bg-stroom-orange animate-ping" />
-                    <span>Hyderabad & Pune Active</span>
-                  </div>
-
-                  {/* Gradient Overlay at bottom */}
-                  <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-stroom-black/90 via-stroom-black/60 to-transparent text-white">
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-stroom-orange">
-                      Real Strangers • Genuine Connections
-                    </p>
-                    <p className="text-sm font-extrabold mt-0.5">
-                      "Walk in alone. Walk out with a squad for life."
-                    </p>
-                  </div>
-                </div>
-
-                {/* Floating Experience Badge */}
-                <div className="absolute -bottom-4 -left-4 p-3.5 rounded-2xl bg-white border border-stroom-orange/20 shadow-xl hidden sm:flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-stroom-cream flex items-center justify-center text-stroom-deep font-black">
-                    <Sparkles className="w-5 h-5 text-stroom-orange" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-stroom-charcoal/60">Community Experiences</p>
-                    <p className="text-xs font-extrabold text-stroom-black">10+ Passion Categories Live</p>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
+        {/* Foreground Content with Precise Center Axis Alignment */}
+        <div className="relative z-20 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center pt-24 pb-20 sm:pt-32 sm:pb-28 flex flex-col items-center">
+          
+          {/* Confident Brand Logo */}
+          <div className="inline-flex items-center justify-center animate-hero-fade mb-5 sm:mb-6">
+            <StroomLogo variant="light" size="xl" showSubtitle={false} />
           </div>
+
+          {/* Editorial Headline Reveal */}
+          <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[1.08] font-display max-w-4xl mx-auto text-center mb-4 sm:mb-6">
+            <span className="block text-white animate-hero-headline-1 pb-1">
+              Strangers Today.
+            </span>
+            <span className="block bg-gradient-to-r from-stroom-orange via-[#FFA24C] to-stroom-gold bg-clip-text text-transparent animate-hero-headline-2 drop-shadow-sm pb-1">
+              Stories Tomorrow.
+            </span>
+          </h1>
+
+          {/* Supporting Text */}
+          <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-stone-200/95 max-w-2xl mx-auto font-medium leading-relaxed drop-shadow text-center mb-7 sm:mb-9 animate-hero-desc">
+            Discover experiences, meet people, and find your community beyond the screen.
+          </p>
+
+          {/* Primary & Secondary Call to Actions */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 sm:gap-4 w-full max-w-md sm:max-w-none mx-auto mb-8 sm:mb-10 animate-hero-cta">
+            <button
+              type="button"
+              onClick={() => onGoToDiscover?.()}
+              className="w-full sm:w-auto h-13 sm:h-14 px-8 sm:px-9 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-extrabold text-sm sm:text-base shadow-brand-lg hover:brightness-110 active:scale-[0.99] transition-all flex items-center justify-center gap-2.5 group cursor-pointer"
+            >
+              <Compass className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
+              <span>Explore Experiences</span>
+              <ArrowRight className="w-4 h-4 ml-0.5 group-hover:translate-x-1 transition-transform" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onGoToCommunities ? onGoToCommunities() : onGoToDiscover?.()}
+              className="w-full sm:w-auto h-13 sm:h-14 px-8 sm:px-9 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md border-2 border-white/25 text-white font-extrabold text-sm sm:text-base shadow-sm transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+            >
+              <Users className="w-5 h-5 text-stroom-orange" />
+              <span>Discover Communities</span>
+            </button>
+          </div>
+
+          {/* Subtle Trust Anchors */}
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-xs font-bold text-stone-300/80 animate-hero-trust">
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-stroom-orange shrink-0" /> Real-World Gatherings
+            </span>
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-stroom-orange shrink-0" /> Zero Awkwardness Hosts
+            </span>
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-stroom-orange shrink-0" /> Verified Partner Venues
+            </span>
+          </div>
+
         </div>
       </section>
 
@@ -681,15 +635,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <Compass className="w-10 h-10 text-stroom-orange/60 mx-auto mb-3" />
               <h3 className="text-base font-black text-stroom-black">New Experiences Coming Soon</h3>
               <p className="text-xs text-stroom-charcoal/70 mt-1 max-w-sm mx-auto">
-                We are curating upcoming weekend sessions for this city. Check back soon or browse all open cities.
+                We are curating upcoming weekend sessions. Be among the first to propose an experience or host in your city.
               </p>
-              <button
-                type="button"
-                onClick={() => setSelectedCityId('all')}
-                className="mt-4 px-4 py-2 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand"
-              >
-                Browse All Open Cities
-              </button>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCityId('all')}
+                  className="px-4 py-2 rounded-xl border border-stroom-borderLight bg-white text-stroom-black text-xs font-black hover:bg-stone-50 transition-all"
+                >
+                  Browse All Open Cities
+                </button>
+                {onGoToPartnerWithUs && (
+                  <button
+                    type="button"
+                    onClick={onGoToPartnerWithUs}
+                    className="px-4 py-2 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand hover:brightness-105 transition-all"
+                  >
+                    Submit an Event
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -753,53 +718,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ==================================================
-          5. REAL STORIES FROM STRANGERS (Dedicated Section)
-          ================================================== */}
-      <section className="py-16 sm:py-20 bg-stroom-cream/40 border-b border-stroom-borderLight">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="text-center max-w-xl mx-auto mb-12">
-            <span className="text-xs font-black uppercase tracking-widest text-stroom-deep">
-              Community Voices
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-black text-stroom-black mt-2 font-display">
-              Real Stories from Strangers
-            </h2>
-            <p className="text-xs sm:text-sm text-stroom-charcoal/70 mt-1 font-medium">
-              Authentic stories from members who showed up solo and built their lifelong squad.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {COMMUNITY_STORIES.map((t, idx) => (
-              <div
-                key={idx}
-                className="p-6 sm:p-7 rounded-3xl bg-white border border-stroom-borderLight shadow-xs flex flex-col justify-between hover:shadow-brand hover:-translate-y-1 transition-all duration-300"
-              >
-                <div>
-                  <Quote className="w-8 h-8 text-stroom-orange/30 mb-3" />
-                  <p className="text-xs sm:text-sm text-stroom-charcoal font-medium leading-relaxed italic">
-                    "{t.quote}"
-                  </p>
-                </div>
-                <div className="mt-6 pt-4 border-t border-stroom-borderLight flex items-center justify-between">
-                  <div>
-                    <h4 className="text-xs font-extrabold text-stroom-black">{t.author}</h4>
-                    <p className="text-[11px] text-stroom-charcoal/70">{t.role}</p>
-                  </div>
-                  <span className="text-[10px] font-bold text-stroom-deep bg-stroom-cream px-2.5 py-0.5 rounded-full border border-stroom-orange/20">
-                    {t.chapter}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-        </div>
-      </section>
-
-      {/* ==================================================
-          6. LAUNCH HUB — 6 CITIES AVAILABILITY
+          5. LAUNCH HUB — 6 CITIES AVAILABILITY
           ================================================== */}
       <section className="py-16 sm:py-20 bg-white border-b border-stroom-borderLight">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1116,6 +1035,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           setIsModalOpen(false);
           setSelectedEvent(null);
         }}
+        onOpenAuth={onOpenAuth}
         onRegistrationSuccess={() => {
           loadEvents();
           if (onGoToParticipant) onGoToParticipant();

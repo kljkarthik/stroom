@@ -531,6 +531,7 @@ export const EventDetailsPage: React.FC<EventDetailsPageProps> = ({
         isOpen={isModalOpen}
         event={modalEventDetails}
         onClose={() => setIsModalOpen(false)}
+        onOpenAuth={onOpenAuth}
         onRegistrationSuccess={() => {
           fetchEventDetails();
         }}

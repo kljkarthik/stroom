@@ -18,6 +18,7 @@
     "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit",
     "start": "node dist/server/index.js",
     "db:backup": "tsx scripts/backup-db.ts",
+    "admin:bootstrap": "tsx scripts/bootstrap-admin.ts",
     "test": "tsx scripts/run-tests.ts",
     "test:raw": "tsx tests/run-all-tests.ts"
   },

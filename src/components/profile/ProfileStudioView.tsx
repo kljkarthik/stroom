@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -22,9 +22,15 @@ import {
   Phone,
   Mail,
   Sliders,
-  Check
+  Check,
+  Trash2,
+  Upload,
+  RefreshCw,
+  Loader2,
+  X
 } from 'lucide-react';
 import ImageUpload from '../common/ImageUpload';
+import { isUploadedPhoto } from '../../utils/avatarUtils';
 
 interface ProfileStudioViewProps {
   onTriggerQuiz?: () => void;
@@ -49,15 +55,6 @@ const OFFICIAL_INTERESTS = [
   { id: 'creative_activities', label: 'Creative Activities', icon: '🎨' },
   { id: 'social_meetups', label: 'Social Meetups', icon: '☕' },
   { id: 'food_cafe', label: 'Food & Café Experiences', icon: '🍔' },
-];
-
-const PRESET_AVATARS = [
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=80',
-  'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=300&q=80',
 ];
 
 const PRESET_COVERS = [
@@ -132,6 +129,92 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
     }
   };
 
+  // Profile Photo Upload State & Handlers
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState<boolean>(false);
+  const [avatarUploadProgress, setAvatarUploadProgress] = useState<number>(0);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [tempPreviewUrl, setTempPreviewUrl] = useState<string | null>(null);
+  const [imageLoadError, setImageLoadError] = useState<boolean>(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Clean up object URLs on unmount or URL replacement
+  useEffect(() => {
+    return () => {
+      if (tempPreviewUrl) {
+        URL.revokeObjectURL(tempPreviewUrl);
+      }
+    };
+  }, [tempPreviewUrl]);
+
+  const handleAvatarFileUpload = async (file: File) => {
+    setAvatarError(null);
+
+    const validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const validExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+    if (!validMimes.includes(file.type.toLowerCase()) && !validExts.includes(ext)) {
+      setAvatarError('Unsupported format. Please select a JPG, JPEG, PNG, or WebP photo.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError(`Photo exceeds 5MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB). Please choose an image under 5MB.`);
+      return;
+    }
+
+    // 1. Generate immediate local preview using object URL from the selected device file
+    const objectUrl = URL.createObjectURL(file);
+    setTempPreviewUrl(objectUrl);
+    setImageLoadError(false);
+    setIsUploadingAvatar(true);
+    setAvatarUploadProgress(15);
+
+    const progressTimer = setInterval(() => {
+      setAvatarUploadProgress((prev) => (prev < 85 ? prev + 15 : prev));
+    }, 200);
+
+    try {
+      // 2. Upload actual file buffer to backend / Cloudinary
+      const res = await api.uploadImage(file, 'avatars');
+      clearInterval(progressTimer);
+      setAvatarUploadProgress(100);
+
+      const confirmedUrl = res.secure_url || res.url;
+      if (!confirmedUrl) {
+        throw new Error('Upload succeeded but no valid image URL was returned.');
+      }
+
+      // 3. Persist confirmed URL through backend
+      await handleAvatarChange(confirmedUrl);
+
+      // 4. Revoke temporary preview now that confirmed URL is active
+      URL.revokeObjectURL(objectUrl);
+      setTempPreviewUrl(null);
+    } catch (err: any) {
+      clearInterval(progressTimer);
+      URL.revokeObjectURL(objectUrl);
+      setTempPreviewUrl(null);
+      setAvatarError(err?.message || 'Failed to upload photo. Please try again.');
+    } finally {
+      setIsUploadingAvatar(false);
+      setAvatarUploadProgress(0);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarError(null);
+    setImageLoadError(false);
+    if (tempPreviewUrl) {
+      URL.revokeObjectURL(tempPreviewUrl);
+      setTempPreviewUrl(null);
+    }
+    await handleAvatarChange('');
+  };
+
   useEffect(() => {
     loadProfile();
   }, []);
@@ -148,7 +231,7 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
         setCity(u.city || 'Hyderabad');
         setBio(u.bio || '');
         setPhone(u.phone || '');
-        setAvatarUrl(u.avatar_url || '');
+        setAvatarUrl(isUploadedPhoto(u.avatar_url) ? u.avatar_url : '');
         setCoverUrl(u.cover_url || '');
         setInterests(u.interests || []);
         setIsPublic(u.is_public !== 0);
@@ -301,54 +384,155 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
         {/* LEFT COLUMN: IDENTITY & VISUAL BRAND (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
           
-          {/* Visual Identity: Cover & Avatar */}
+          {/* Visual Identity: Profile Photo & Cover */}
           <div className="p-6 rounded-3xl bg-white border border-stroom-borderLight shadow-sm space-y-5">
-            <h3 className="text-xs font-black uppercase tracking-wider text-stroom-black flex items-center gap-1.5">
+            <h3 className="text-xs font-black uppercase tracking-wider text-stroom-black flex items-center gap-2 pb-2 border-b border-stroom-borderLight">
               <Camera className="w-4 h-4 text-stroom-orange" />
-              <span>Visual Identity & Presets</span>
+              <span>PROFILE PHOTO</span>
             </h3>
 
-            {/* Avatar Picker */}
-            <div>
-              <span className="text-xs font-bold text-stroom-charcoal block mb-2">Member Photograph / Avatar</span>
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-2xl p-1 bg-gradient-to-tr from-stroom-orange to-stroom-gold shrink-0 overflow-hidden shadow-md">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="Avatar" className="w-full h-full rounded-xl object-cover" />
+            {avatarError && (
+              <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-600" />
+                  <span>{avatarError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAvatarError(null)}
+                  className="text-red-400 hover:text-red-700 p-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Profile Photo Uploader */}
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+              {/* Circular Current Profile Photo */}
+              <div className="flex flex-col items-center gap-2 shrink-0">
+                <div className="relative">
+                  {(tempPreviewUrl || (isUploadedPhoto(avatarUrl) && !imageLoadError)) ? (
+                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-stroom-orange p-1 shadow-md bg-white overflow-hidden">
+                      <img
+                        src={tempPreviewUrl || avatarUrl}
+                        alt="Current Profile Photo"
+                        className="w-full h-full rounded-full object-cover object-center"
+                        onError={() => setImageLoadError(true)}
+                      />
+                    </div>
                   ) : (
-                    <div className="w-full h-full rounded-xl bg-stroom-charcoal flex items-center justify-center text-white font-black text-2xl">
-                      {displayName?.charAt(0) || 'M'}
+                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-400 shadow-md">
+                      <UserIcon className="w-12 h-12 text-stone-500" />
                     </div>
                   )}
                 </div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">
+                  {tempPreviewUrl ? 'Uploading...' : isUploadedPhoto(avatarUrl) && !imageLoadError ? 'Active Avatar' : 'No Photo Set'}
+                </span>
+              </div>
 
-                <div className="flex-1 space-y-3">
-                  <span className="text-[10px] text-stroom-charcoal/70 block">Select a curated aesthetic avatar or upload your own:</span>
-                  <div className="flex flex-wrap gap-2">
-                    {PRESET_AVATARS.map((url, idx) => (
+              {/* Upload Actions & Compact Preview */}
+              <div className="flex-1 w-full space-y-4">
+                {/* Hidden File Input */}
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/jpg"
+                  disabled={isUploadingAvatar}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      handleAvatarFileUpload(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
+                />
+
+                {(tempPreviewUrl || (isUploadedPhoto(avatarUrl) && !imageLoadError)) ? (
+                  /* Photo Present or Uploading: Compact Rectangular Preview + Actions */
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-stroom-charcoal">
+                        Uploaded Photo Preview
+                      </span>
+                      {isUploadingAvatar ? (
+                        <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin text-amber-600" />
+                          <span>Uploading {avatarUploadProgress}%</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                          Saved & Live
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Compact Rectangular Image Preview — 100% Filled, ZERO grey empty blocks! */}
+                    <div className="w-full max-w-xs h-36 rounded-2xl overflow-hidden border border-stroom-borderLight bg-stone-100 shadow-sm relative group">
+                      <img
+                        src={tempPreviewUrl || avatarUrl}
+                        alt="Uploaded Profile Photo Preview"
+                        className="w-full h-full object-cover object-center block"
+                        onError={() => setImageLoadError(true)}
+                      />
+                      {isUploadingAvatar && (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white p-3">
+                          <Loader2 className="w-6 h-6 animate-spin text-stroom-orange mb-1.5" />
+                          <span className="text-xs font-bold">Uploading to Cloudinary...</span>
+                          <span className="text-[11px] font-mono text-amber-300 font-bold">{avatarUploadProgress}%</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons: Replace Photo & Remove Photo */}
+                    <div className="flex flex-wrap items-center gap-2.5 pt-1">
                       <button
-                        key={idx}
                         type="button"
-                        onClick={() => handleAvatarChange(url)}
-                        className={`w-9 h-9 rounded-xl overflow-hidden border-2 transition-all ${
-                          avatarUrl === url ? 'border-stroom-orange scale-105' : 'border-transparent hover:border-stroom-borderLight'
-                        }`}
+                        onClick={() => avatarInputRef.current?.click()}
+                        disabled={isUploadingAvatar}
+                        className="px-4 py-2 rounded-xl bg-stroom-black text-white hover:bg-stone-800 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
                       >
-                        <img src={url} alt={`Preset ${idx}`} className="w-full h-full object-cover" />
+                        <RefreshCw className="w-3.5 h-3.5 text-stroom-orange" />
+                        <span>Replace Photo</span>
                       </button>
-                    ))}
+
+                      <button
+                        type="button"
+                        onClick={handleRemoveAvatar}
+                        disabled={isUploadingAvatar}
+                        className="px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                        <span>Remove Photo</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-stone-500 font-medium">
+                      Supports JPG, JPEG, PNG, or WebP up to 5MB. Synchronized with Cloudinary across your profile, dashboard, and navigation.
+                    </p>
                   </div>
-                  <ImageUpload
-                    value={avatarUrl}
-                    onChange={(url) => handleAvatarChange(url)}
-                    folder="avatars"
-                    aspectRatio="square"
-                    maxSizeMB={5}
-                    label="Upload Custom Avatar"
-                    helperText="Upload a JPG, PNG or WebP profile photo (max 5MB)."
-                    className="pt-1"
-                  />
-                </div>
+                ) : (
+                  /* No Photo: Upload New Photo Action */
+                  <div className="space-y-3">
+                    <p className="text-xs text-stroom-charcoal/80 font-medium leading-relaxed">
+                      Upload an authentic photo of yourself. If no photo is uploaded, a simple neutral profile circle is displayed.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={isUploadingAvatar}
+                      className="px-5 py-3 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-brand hover:brightness-105 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>Upload New Photo</span>
+                    </button>
+
+                    <p className="text-[11px] text-stone-500 font-medium">
+                      Select JPG, JPEG, PNG, or WebP directly from your device (max 5MB).
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -377,6 +561,7 @@ export const ProfileStudioView: React.FC<ProfileStudioViewProps> = ({
                 maxSizeMB={8}
                 label="Upload Custom Banner"
                 helperText="Upload a high-resolution banner image (max 8MB)."
+                allowManualUrl={false}
               />
             </div>
           </div>

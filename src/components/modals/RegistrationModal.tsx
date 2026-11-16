@@ -14,7 +14,9 @@ import {
   Ticket,
   Download,
   AlertCircle,
-  Loader2
+  Loader2,
+  Lock,
+  ArrowRight
 } from 'lucide-react';
 
 export interface EventDetails {
@@ -36,6 +38,7 @@ interface RegistrationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRegistrationSuccess?: () => void;
+  onOpenAuth?: (eventId?: string) => void;
 }
 
 export const RegistrationModal: React.FC<RegistrationModalProps> = ({
@@ -43,6 +46,7 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
   isOpen,
   onClose,
   onRegistrationSuccess,
+  onOpenAuth,
 }) => {
   const { user, isAuthenticated } = useAuth();
   const [formData, setFormData] = useState({
@@ -159,7 +163,32 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
             </div>
           )}
 
-          {!isSuccess ? (
+          {!isAuthenticated ? (
+            <div className="py-8 text-center space-y-5">
+              <div className="w-16 h-16 rounded-3xl bg-stroom-cream border border-stroom-orange/30 flex items-center justify-center text-stroom-orange mx-auto shadow-sm">
+                <Lock className="w-8 h-8" />
+              </div>
+              <div className="space-y-1.5 max-w-sm mx-auto">
+                <h4 className="text-xl font-black text-stroom-black font-display">
+                  Sign In Required to Register
+                </h4>
+                <p className="text-xs text-stroom-charcoal/80 font-medium leading-relaxed">
+                  Please sign in or create an account to claim your verified entry pass and reserve your spot for this experience.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  if (onOpenAuth) onOpenAuth(event.id);
+                }}
+                className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-stroom-orange to-stroom-deep text-white font-extrabold text-sm shadow-brand hover:brightness-105 active:scale-[0.99] transition-all inline-flex items-center justify-center gap-2"
+              >
+                <span>Sign In / Join STROOM</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          ) : !isSuccess ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-stroom-charcoal uppercase tracking-wider mb-1">

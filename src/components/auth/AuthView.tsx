@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth, isDemoAuthEnabled } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { StroomLogo } from '../common/StroomLogo';
 import {
   Sparkles,

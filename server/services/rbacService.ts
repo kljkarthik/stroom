@@ -137,7 +137,10 @@ export function getAllowedSidebarSections(role?: string): string[] {
   }
   const sections: string[] = [];
   if (perms.has('overview.view')) sections.push('overview');
-  if (perms.has('events.view') || perms.has('cities.manage')) sections.push('events');
+  if (perms.has('events.view') || perms.has('cities.manage')) {
+    sections.push('events');
+    sections.push('event_submissions');
+  }
   if (perms.has('members.view') || perms.has('members.manage') || perms.has('roles.assign')) sections.push('members');
   if (perms.has('communities.manage')) sections.push('communities');
   if (perms.has('partners.verify') || perms.has('campaigns.approve')) sections.push('partners');

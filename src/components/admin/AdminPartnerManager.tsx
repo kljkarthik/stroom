@@ -237,7 +237,13 @@ export const AdminPartnerManager: React.FC = () => {
             <Loader2 className="w-6 h-6 animate-spin text-stroom-orange" />
           </div>
         ) : partners.length === 0 ? (
-          <div className="p-12 text-center text-xs text-stone-400">No partner accounts matched.</div>
+          <div className="p-16 text-center bg-white rounded-2xl border border-dashed border-stroom-borderLight m-4">
+            <Building2 className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+            <h4 className="text-sm font-black text-stroom-black uppercase">No partner applications yet</h4>
+            <p className="mt-1 text-xs text-stroom-charcoal/70 max-w-sm mx-auto">
+              Partners who register or submit venue proposals will appear here for review and onboarding.
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">

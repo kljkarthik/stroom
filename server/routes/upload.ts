@@ -139,4 +139,38 @@ router.delete('/', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * GET /api/upload/file/:filename
+ * Serves the genuine binary image payload for uploaded assets (supports dev/local mode).
+ * Publicly accessible so standard <img> tags render the image without authorization headers.
+ */
+router.get('/file/:filename', async (req: any, res: Response) => {
+  try {
+    const rawFilename = req.params.filename || '';
+    const uploadId = rawFilename.split('.')[0];
+    await ensureMediaUploadsTable();
+    const adapter = getDatabaseAdapter();
+
+    const record = await adapter.queryOne<{ format: string; image_data: string; bytes: number }>(
+      'SELECT format, image_data, bytes FROM media_uploads WHERE id = ? OR public_id LIKE ?',
+      [uploadId, `%${uploadId}%`]
+    );
+
+    if (!record || !record.image_data) {
+      return res.status(404).send('Image asset not found.');
+    }
+
+    const imgBuffer = Buffer.from(record.image_data, 'base64');
+    const format = (record.format || 'jpeg').toLowerCase();
+    const mime = format === 'png' ? 'image/png' : format === 'webp' ? 'image/webp' : 'image/jpeg';
+
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Length', imgBuffer.length);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.end(imgBuffer);
+  } catch (err: any) {
+    return res.status(500).send('Failed to serve image asset.');
+  }
+});
+
 export default router;

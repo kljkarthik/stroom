@@ -31,6 +31,7 @@ interface CommunitiesPageProps {
   onSelectCommunity: (communityId: string) => void;
   onOpenAuth?: () => void;
   onGoToEvents?: () => void;
+  onGoToSubmitEvent?: () => void;
 }
 
 const CATEGORIES = [
@@ -62,6 +63,7 @@ export const CommunitiesPage: React.FC<CommunitiesPageProps> = ({
   onSelectCommunity,
   onOpenAuth,
   onGoToEvents,
+  onGoToSubmitEvent,
 }) => {
   const { isAuthenticated } = useAuth();
   const [communities, setCommunities] = useState<Community[]>([]);
@@ -269,21 +271,37 @@ export const CommunitiesPage: React.FC<CommunitiesPageProps> = ({
             <div className="w-16 h-16 rounded-3xl bg-stroom-cream flex items-center justify-center text-stroom-orange mx-auto mb-4">
               <Users className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-black text-stroom-black uppercase">No communities found</h3>
-            <p className="mt-2 text-xs text-stroom-charcoal/80 font-medium">
-              We couldn't find any communities matching your criteria. Try picking another city or interest.
+            <h3 className="text-lg font-black text-stroom-black uppercase">Communities are growing</h3>
+            <p className="mt-1 text-sm font-extrabold text-stroom-orange">
+              Be among the first to create one.
             </p>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedCity('all');
-                setSelectedCategory('all');
-              }}
-              className="mt-5 px-5 py-2.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand hover:brightness-105 transition-all inline-flex items-center gap-2"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Reset Filters</span>
-            </button>
+            <p className="mt-2 text-xs text-stroom-charcoal/80 font-medium">
+              Connect with like-minded people in your city around sports, coffee, board games, and creative passions. Propose an experience or start a local circle.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedCity('all');
+                  setSelectedCategory('all');
+                }}
+                className="px-5 py-2.5 rounded-xl border border-stroom-borderLight bg-white text-stroom-black text-xs font-black hover:bg-stone-50 transition-all inline-flex items-center gap-2"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-stroom-orange" />
+                <span>Explore Again</span>
+              </button>
+              {onGoToSubmitEvent && (
+                <button
+                  type="button"
+                  onClick={onGoToSubmitEvent}
+                  className="px-5 py-2.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand hover:brightness-105 transition-all inline-flex items-center gap-2"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Submit an Event / Host</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 

@@ -2,10 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, OnboardingStatus, UserRole } from '../types';
 import { api } from '../services/api';
 
-export type DemoRoleType = 'newUser' | 'admin' | 'completedUser' | 'user' | 'partner' | 'checkin';
-
-export const isDemoAuthEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_AUTH === 'true';
-
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -20,7 +16,6 @@ interface AuthContextType {
   logout: () => void;
   refreshUser: () => Promise<void>;
   updateUserStatus: (status: OnboardingStatus) => void;
-  loginAsDemoUser: (type: DemoRoleType) => Promise<User>;
   switchUserRole: (role: UserRole) => Promise<void>;
 }
 
@@ -108,39 +103,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser({ ...user, role: newRole });
   };
 
-  const loginAsDemoUser = async (type: DemoRoleType): Promise<User> => {
-    if (!isDemoAuthEnabled) {
-      throw new Error('Demo quick login is disabled in production environments.');
-    }
-    setIsLoading(true);
-    try {
-      if (type === 'admin') {
-        const adminUser = await login('admin@stroom.app', 'Admin@123');
-        return adminUser;
-      } else if (type === 'partner') {
-        const partnerUser = await login('partner@stroom.app', 'Partner@123');
-        return partnerUser;
-      } else {
-        const u = await login('user@stroom.app', 'User@123');
-        if (type === 'newUser') {
-          const resetRes = await api.resetDemo('NOT_STARTED');
-          setUser(resetRes.user);
-          return resetRes.user;
-        } else if (type === 'completedUser' || type === 'user') {
-          const resetRes = await api.resetDemo('COMPLETED');
-          setUser(resetRes.user);
-          return resetRes.user;
-        } else if (type === 'checkin') {
-          await switchUserRole('checkin_staff');
-          return { ...u, role: 'checkin_staff' };
-        }
-        return u;
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const adminStaffRoles = [
     'admin',
     'super_admin',
@@ -172,7 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         refreshUser,
         updateUserStatus,
-        loginAsDemoUser,
         switchUserRole,
       }}
     >

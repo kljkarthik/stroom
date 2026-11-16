@@ -103,7 +103,7 @@ export function initDatabase() {
     -- Independent Auction Rooms
     CREATE TABLE IF NOT EXISTS auction_rooms (
       id TEXT PRIMARY KEY,
-      event_id TEXT UNIQUE NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
+      event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
       title TEXT NOT NULL,
       format_type TEXT NOT NULL DEFAULT 'stroom_premier', -- 'stroom_premier', 'rapid_draft', 'corporate_cup'
       status TEXT NOT NULL DEFAULT 'SCHEDULED', -- 'SCHEDULED', 'LIVE', 'PAUSED', 'COMPLETED'
@@ -208,6 +208,40 @@ export function initDatabase() {
       status TEXT NOT NULL DEFAULT 'submitted', -- 'submitted', 'under_review', 'approved', 'rejected'
       proposal_pdf_data TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Community Event Proposals & Submissions (User & Partner Experience Submissions)
+    CREATE TABLE IF NOT EXISTS event_submissions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      organizer_name TEXT NOT NULL,
+      organizer_email TEXT NOT NULL,
+      organizer_phone TEXT NOT NULL,
+      organization_name TEXT,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      short_description TEXT NOT NULL,
+      detailed_description TEXT NOT NULL,
+      format TEXT NOT NULL DEFAULT 'Physical',
+      city TEXT NOT NULL,
+      venue TEXT,
+      proposed_date TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT,
+      expected_capacity INTEGER NOT NULL,
+      age_group TEXT,
+      cover_image_url TEXT,
+      additional_images_json TEXT,
+      estimated_budget TEXT,
+      ticketing_details TEXT,
+      sponsorship_requirements TEXT,
+      additional_notes TEXT,
+      status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'
+      admin_notes TEXT,
+      reviewed_by TEXT,
+      reviewed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     -- Participant Achievements & STROOM Passport
@@ -487,9 +521,7 @@ function migrateUsersTable() {
       db.prepare('ALTER TABLE users ADD COLUMN bio TEXT').run();
     }
 
-    // Set member_id for admin and default user if missing
-    db.prepare("UPDATE users SET member_id = 'STR-HYD-0001', role = 'super_admin', city = 'Hyderabad' WHERE email = 'admin@stroom.app' AND (member_id IS NULL OR member_id = '')").run();
-    db.prepare("UPDATE users SET member_id = 'STR-HYD-0428', role = 'participant', city = 'Hyderabad' WHERE email = 'user@stroom.app' AND (member_id IS NULL OR member_id = '')").run();
+
   } catch (err) {
     // Migration helper
   }
@@ -607,19 +639,7 @@ function migratePhase4Tables() {
       db.prepare("ALTER TABLE users ADD COLUMN notification_settings_json TEXT DEFAULT '{\"eventReminders\":true,\"communityUpdates\":true,\"achievementAlerts\":true,\"marketing\":false}'").run();
     }
 
-    // Set default display_name and initial interests for demo users
-    db.prepare(`
-      UPDATE users
-      SET display_name = COALESCE(display_name, full_name),
-          first_name = COALESCE(first_name, substr(full_name, 1, instr(full_name || ' ', ' ') - 1)),
-          last_name = COALESCE(last_name, substr(full_name, instr(full_name || ' ', ' ') + 1)),
-          interests_json = CASE
-            WHEN interests_json IS NULL OR interests_json = '[]'
-            THEN '["cricket","gaming","networking","social_meetups"]'
-            ELSE interests_json
-          END
-      WHERE email IN ('admin@stroom.app', 'user@stroom.app')
-    `).run();
+
 
     // 2. Seed Master Achievements Catalog
     const masterAchievements = [
@@ -746,32 +766,7 @@ function migratePhase4Tables() {
       WHERE r.checkin_status = 'checked_in'
     `).run();
 
-    // 4. Initial activity log for demo user if empty
-    const demoUser = db.prepare("SELECT id FROM users WHERE email = 'user@stroom.app'").get() as { id: string } | undefined;
-    if (demoUser) {
-      const actCount = (db.prepare('SELECT COUNT(*) as c FROM activity_logs WHERE user_id = ?').get(demoUser.id) as any).c;
-      if (actCount === 0) {
-        db.prepare(`
-          INSERT INTO activity_logs (id, user_id, activity_type, title, description, created_at)
-          VALUES
-            ('act_001', ?, 'joined_stroom', 'Welcome to STROOM', 'Joined the Strangers Room community ecosystem as a verified member.', datetime('now', '-7 days')),
-            ('act_002', ?, 'community_joined', 'Joined Hyderabad Cricket Enthusiasts', 'Connected with local cricket lovers in Jubilee Hills.', datetime('now', '-5 days')),
-            ('act_003', ?, 'event_registered', 'Registered for STROOM Premier Cricket Auction', 'Entry pass STR-HYD-0428 generated with VIP table seat.', datetime('now', '-2 days'))
-        `).run(demoUser.id, demoUser.id, demoUser.id);
-      }
 
-      // Initial notifications for demo user if empty
-      const notifCount = (db.prepare('SELECT COUNT(*) as c FROM notifications WHERE user_id = ?').get(demoUser.id) as any).c;
-      if (notifCount === 0) {
-        db.prepare(`
-          INSERT INTO notifications (id, user_id, type, title, message, created_at)
-          VALUES
-            ('notif_001', ?, 'registration', 'Pass Confirmed: STROOM Cricket Auction', 'Your digital entry pass is confirmed for Saturday, 6:00 PM at Third Wave Coffee.', datetime('now', '-2 days')),
-            ('notif_002', ?, 'community', 'New Event in Hyderabad Cricket Enthusiasts', 'Next weekend mock auction draft opened for registrations.', datetime('now', '-1 day')),
-            ('notif_003', ?, 'achievement', 'Badge Unlocked: Pioneer Member', 'You earned the Pioneer Member badge for completing your member profile studio.', datetime('now', '-1 hour'))
-        `).run(demoUser.id, demoUser.id, demoUser.id);
-      }
-    }
   } catch (err) {
     // Migration helper
   }
@@ -856,277 +851,17 @@ export function seedExtendedDomainData() {
     insertCity.run('city_blr', 'Bangalore', 'Karnataka', 0, 5, 'Tech & Social Circle Hub • Indiranagar & Koramangala (Coming Soon)');
     insertCity.run('city_kolkata', 'Kolkata', 'West Bengal', 0, 6, 'Cultural & Meetup Hub • Park Street & Salt Lake (Coming Soon)');
 
-    // 2. Ensure Verified Real Venues
-    const insertVenue = db.prepare(`
-      INSERT OR IGNORE INTO venues (id, city_id, name, area, address, capacity, partner_type, contact_name, contact_email, contact_phone, is_verified, partnership_tier)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    // 2. Venues: Populated via genuine partner submissions & admin verification
 
-    insertVenue.run(
-      'ven_hyd_thirdwave',
-      'city_hyd',
-      'Third Wave Coffee & Lounge',
-      'Jubilee Hills',
-      'Road No. 36, Jubilee Hills, Hyderabad',
-      75,
-      'cafe',
-      'Aditya Reddy',
-      'aditya.hyd@thirdwave.in',
-      '+91 98490 12345',
-      1,
-      'Gold Venue Partner'
-    );
+    // 3. Events: Production clean state (created via event submissions & admin publishing)
 
-    insertVenue.run(
-      'ven_hyd_onegolf',
-      'city_hyd',
-      'OneGolf Brewery & Sports Arena',
-      'Gachibowli',
-      'Financial District, Gachibowli, Hyderabad',
-      150,
-      'sports_turf',
-      'Vikram Varma',
-      'vikram@onegolfsports.in',
-      '+91 97000 54321',
-      1,
-      'Flagship Sports Arena'
-    );
 
-    insertVenue.run(
-      'ven_pune_social',
-      'city_pune',
-      'FC Road Social',
-      'Shivajinagar',
-      'Fergusson College Road, Shivajinagar, Pune',
-      100,
-      'lounge',
-      'Pooja Kulkarni',
-      'pooja.k@impresario.in',
-      '+91 98220 98765',
-      1,
-      'Gold Venue Partner'
-    );
 
-    insertVenue.run(
-      'ven_pune_vohuman',
-      'city_pune',
-      'Vohuman Cafe & Cultural Space',
-      'Dhole Patil Road',
-      'Near Pune Station, Dhole Patil Rd, Pune',
-      60,
-      'cafe',
-      'Homi Irani',
-      'homi@vohuman.in',
-      '+91 98230 11223',
-      1,
-      'Heritage Cafe Partner'
-    );
 
-    insertVenue.run(
-      'ven_blr_indiranagar',
-      'city_blr',
-      'Indiranagar Social & Rooftop Turf',
-      'Indiranagar',
-      '100 Feet Rd, Defence Colony, Indiranagar, Bangalore',
-      120,
-      'sports_turf',
-      'Nikhil Menon',
-      'nikhil.blr@socialoffline.in',
-      '+91 80 4123 4567',
-      1,
-      'Gold Sports Partner'
-    );
 
-    insertVenue.run(
-      'ven_mum_bandra',
-      'city_mum',
-      'Subko Coffee Roasters & Open Terrace',
-      'Bandra West',
-      'Chapel Rd, Ranwar, Bandra West, Mumbai',
-      80,
-      'cafe',
-      'Rahul Reddy',
-      'rahul@subko.co',
-      '+91 22 2640 1234',
-      1,
-      'Creative Space Partner'
-    );
 
-    // 3. Ensure Events (with Hyderabad & Pune Flagships)
-    const insertEvent = db.prepare(`
-      INSERT OR IGNORE INTO events (id, city_id, venue_id, title, category, event_date, event_time, description, seats_total, seats_booked, entry_fee, status, is_flagship, image_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
 
-    insertEvent.run(
-      'evt_hyd_auction_01',
-      'city_hyd',
-      'ven_hyd_thirdwave',
-      'STROOM Hyderabad Premier Cricket Auction 2026',
-      'cricket_auction',
-      'Saturday, Nov 28, 2026',
-      '5:00 PM IST',
-      'The ultimate live community cricket bidding arena. 5 franchise tables, 12 marquee players, live gavel hammer, and authentic camaraderie.',
-      60,
-      48,
-      '₹499 (Includes Welcome Cold Brew & Member Badge)',
-      'live',
-      1,
-      'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80'
-    );
 
-    insertEvent.run(
-      'evt_pune_draft_02',
-      'city_pune',
-      'ven_pune_social',
-      'Pune Deccan Franchise Draft & Mixer',
-      'cricket_auction',
-      'Sunday, Dec 06, 2026',
-      '4:30 PM IST',
-      'Experience the thrill of team ownership and draft night. Grab your franchise paddle, scout local players, and build your weekend squad.',
-      50,
-      36,
-      '₹499 (Includes Team Cap & Social Bites)',
-      'published',
-      1,
-      'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80'
-    );
-
-    insertEvent.run(
-      'evt_hyd_sports_03',
-      'city_hyd',
-      'ven_hyd_onegolf',
-      'Gachibowli Box Cricket & Sunset Brews',
-      'sports',
-      'Saturday, Dec 12, 2026',
-      '4:00 PM IST',
-      'Fast-paced 6-a-side floodlit box cricket tournament with post-match networking and craft mocktails.',
-      80,
-      64,
-      '₹399 (Includes Turf Slot & Refreshments)',
-      'published',
-      0,
-      'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=800&auto=format&fit=crop&q=80'
-    );
-
-    insertEvent.run(
-      'evt_pune_cafe_04',
-      'city_pune',
-      'ven_pune_vohuman',
-      'Koregaon Park Chai Talks & Board Game Night',
-      'cafe_meetup',
-      'Friday, Dec 18, 2026',
-      '7:00 PM IST',
-      'Warm chai, authentic bun maska, and strategic board game battles for strangers looking to make real friends.',
-      45,
-      28,
-      '₹249 (Includes Bun Maska & Chai)',
-      'published',
-      0,
-      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=80'
-    );
-
-    insertEvent.run(
-      'evt_hyd_cinema_05',
-      'city_hyd',
-      'ven_hyd_thirdwave',
-      'Jubilee Hills Open-Air Indie Cinema & Discussion',
-      'movies',
-      'Thursday, Dec 24, 2026',
-      '7:00 PM IST',
-      'Watch an acclaimed regional indie short film under the stars, followed by coffee and guided stranger discussions on storytelling.',
-      50,
-      32,
-      'Free Entry',
-      'published',
-      0,
-      'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&auto=format&fit=crop&q=80'
-    );
-
-    insertEvent.run(
-      'evt_pune_trek_06',
-      'city_pune',
-      'ven_pune_social',
-      'Sinhagad Foothills Sunrise Cycling & Trail Run',
-      'cycling',
-      'Saturday, Jan 02, 2027',
-      '5:30 AM IST',
-      'Scenic dawn pedal ride up towards Sinhagad Fort, hot Maharashtrian breakfast at the base, and fresh air with a positive stranger pack.',
-      35,
-      24,
-      '₹299 (Includes Breakfast & Guide)',
-      'published',
-      0,
-      'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&auto=format&fit=crop&q=80'
-    );
-
-    insertEvent.run(
-      'evt_blr_futsal_07',
-      'city_blr',
-      'ven_blr_indiranagar',
-      'Indiranagar 5v5 Turf Futsal & Rooftop Social',
-      'sports',
-      'Sunday, Jan 10, 2027',
-      '6:00 PM IST',
-      'Fast-paced 5-a-side floodlit football mixer. Individual players are drafted into balanced squads on arrival with rooftop refreshments after.',
-      40,
-      30,
-      '₹349 (Includes Turf Slot & Beverage)',
-      'published',
-      0,
-      'https://images.unsplash.com/photo-1529900245534-47fbf82a472c?w=800&auto=format&fit=crop&q=80'
-    );
-
-    insertEvent.run(
-      'evt_mum_acoustic_08',
-      'city_mum',
-      'ven_mum_bandra',
-      'Bandra Sunset Acoustic Jam & Strangers Circle',
-      'creativity',
-      'Friday, Jan 15, 2027',
-      '6:30 PM IST',
-      'An intimate rooftop acoustic music circle. Bring an instrument or simply your voice and open mind for an evening of shared melodies.',
-      40,
-      25,
-      'Free Entry',
-      'published',
-      0,
-      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80'
-    );
-
-    insertEvent.run(
-      'evt_hyd_founders_09',
-      'city_hyd',
-      'ven_hyd_thirdwave',
-      'Hitec City Tech Builders & Founders Circle',
-      'networking',
-      'Wednesday, Jan 20, 2027',
-      '7:00 PM IST',
-      'No pitches, no slide decks. An informal roundtable for builders, developers, and founders sharing real failures and architectural lessons.',
-      35,
-      22,
-      'Free Entry',
-      'published',
-      0,
-      'https://images.unsplash.com/photo-1515187029135-18ee286d815b?w=800&auto=format&fit=crop&q=80'
-    );
-
-    insertEvent.run(
-      'evt_hyd_past_10',
-      'city_hyd',
-      'ven_hyd_thirdwave',
-      'Hyderabad Season 1 Inaugural Player Auction',
-      'cricket_auction',
-      'Saturday, Oct 24, 2026',
-      '5:00 PM IST',
-      'Our inaugural pilot auction where 40 strangers formed 4 franchise squads that still play together every weekend.',
-      40,
-      40,
-      '₹499 (Sold Out)',
-      'completed',
-      0,
-      'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80'
-    );
 
     // 4. Ensure Auction Room for Hyderabad Flagship
     const insertAuction = db.prepare(`
@@ -1145,7 +880,7 @@ export function seedExtendedDomainData() {
 
     insertAuction.run(
       'auc_hyd_001',
-      'evt_hyd_auction_01',
+      null,
       'STROOM Hyderabad Premier Cricket Auction 2026',
       'stroom_premier',
       'LIVE',
@@ -1301,7 +1036,7 @@ export function seedExtendedDomainData() {
 
     insertAuction.run(
       'auc_pune_002',
-      'evt_pune_draft_02',
+      null,
       'Pune Deccan All-Time Cricket Legends Mega Auction',
       'all_time_mega',
       'SCHEDULED',
@@ -1411,7 +1146,7 @@ export function seedExtendedDomainData() {
 
     insertAuction.run(
       'auc_blr_003',
-      'evt_blr_futsal_07',
+      null,
       'Bangalore Rapid Draft Blitz Auction 2027',
       'rapid_draft',
       'REGISTRATION_OPEN',
@@ -1471,7 +1206,7 @@ export function seedExtendedDomainData() {
 
     insertAuction.run(
       'auc_hyd_past',
-      'evt_hyd_sports_03',
+      null,
       'STROOM Hyderabad Autumn Box Cup Auction 2025',
       'ipl_mock',
       'COMPLETED',
@@ -1515,372 +1250,25 @@ export function seedExtendedDomainData() {
     );
     db.prepare("UPDATE auction_players SET nationality = 'India', is_overseas = 0, category = 'Batter', batting_style = 'Right-hand bat', sold_at = datetime('now', '-30 days') WHERE id = 'ply_past_001'").run();
 
-    // Seed sample bidder registration for regular user
-    const sampleUser = db.prepare("SELECT id FROM users WHERE email = 'user@stroom.app'").get() as { id: string } | undefined;
-    if (sampleUser) {
-      db.prepare(`
-        INSERT OR IGNORE INTO auction_registrations (id, auction_id, user_id, role_type, team_id, status)
-        VALUES ('reg_auc_001', 'auc_hyd_001', ?, 'team_owner', 'team_hyd_1', 'confirmed')
-      `).run(sampleUser.id);
-    }
 
-    // 7. Seed Real Coupons for Partner Cafes
-    const insertCoupon = db.prepare(`
-      INSERT OR IGNORE INTO coupons (id, venue_id, code, title, description, discount_type, discount_value, max_redemptions, actual_redemptions, status, valid_until)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
 
-    insertCoupon.run(
-      'cpn_hyd_01',
-      'ven_hyd_thirdwave',
-      'STROOMJUBILEE20',
-      '20% Off Artisanal Brews & Bites',
-      'Enjoy 20% off all manual brews, pour-overs and sandwich platters during STROOM meetups.',
-      'percentage',
-      '20%',
-      500,
-      42,
-      'active',
-      '2026-12-31'
-    );
+    // 7. Coupons: Managed via partner & admin promotional campaigns
 
-    insertCoupon.run(
-      'cpn_pune_02',
-      'ven_pune_social',
-      'CRICKETPUNE',
-      'Buy 1 Get 1 Welcome Beverage',
-      'Show your STROOM digital pass to claim BOGO on signature Social mixers & mocktails.',
-      'bogo',
-      'BOGO',
-      300,
-      28,
-      'active',
-      '2026-12-31'
-    );
+    // 8. Discovery Items: Real-time discovery derived from active communities & curated experiences
 
-    // 8. Seed Verified Community Discovery Items (Prioritizing Hyderabad & Pune)
-    db.prepare("DELETE FROM discovery_items WHERE location LIKE '%Amsterdam%' OR location LIKE '%Germany%'").run();
 
-    const insertDiscovery = db.prepare(`
-      INSERT OR IGNORE INTO discovery_items (id, type, title, subtitle, description, image_url, category, tags, location, member_count, date_time)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
 
-    insertDiscovery.run(
-      'disc_hyd_cricket',
-      'community',
-      'Hyderabad Weekend Cricket Brotherhood',
-      '540 cricket fans & players',
-      'Weekly box cricket, turf leagues, and sporting watch-alongs across Jubilee Hills and Gachibowli.',
-      'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
-      'Cricket',
-      JSON.stringify(['sports', 'friendship', 'social_meetups']),
-      'Jubilee Hills, Hyderabad',
-      540,
-      'Every Saturday 06:30 AM'
-    );
 
-    insertDiscovery.run(
-      'disc_pune_cafe',
-      'community',
-      'Pune Coffee, Bun Maska & Deep Talks',
-      '380 chill souls',
-      'Slow Sunday morning breakfast meetups, book exchanges, and creative brainstorming at iconic Pune cafes.',
-      'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&auto=format&fit=crop&q=80',
-      'Café Meetups',
-      JSON.stringify(['casual_hangouts', 'food_culture', 'friendship']),
-      'FC Road & Koregaon Park, Pune',
-      380,
-      'Every Sunday 09:30 AM'
-    );
 
-    insertDiscovery.run(
-      'disc_hyd_gaming',
-      'community',
-      'Hitec City Board Games & FIFA Guild',
-      '290 gamers',
-      'From Catan tournaments to FIFA leagues at Gachibowli gaming lounges. Novices and pros all welcome.',
-      'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&auto=format&fit=crop&q=80',
-      'Gaming',
-      JSON.stringify(['gaming', 'like_minded', 'casual_hangouts']),
-      'Gachibowli, Hyderabad',
-      290,
-      'Bi-weekly Friday nights'
-    );
 
-    insertDiscovery.run(
-      'disc_pune_cycling',
-      'event',
-      'Sinhagad Fort Sunrise Cycling & Trek',
-      'Saturday, 5:30 AM • 18 riders',
-      'Pedal up scenic routes toward Sinhagad, grab hot kanda bhaji, and watch the sun break through Pune mists.',
-      'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&auto=format&fit=crop&q=80',
-      'Cycling & Fitness',
-      JSON.stringify(['outdoor_adventures', 'fitness_wellness', 'travel_adventure']),
-      'Sinhagad Foothills, Pune',
-      18,
-      'Saturday • 05:30 AM'
-    );
 
-    insertDiscovery.run(
-      'disc_hyd_auction',
-      'event',
-      'STROOM Hyderabad Turf Cricket Championship',
-      'Saturday, Dec 5 • 50 seats',
-      'Floodlit turf box cricket, team squads, live networking, and post-match refreshments with Hyderabad sports fans.',
-      'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&auto=format&fit=crop&q=80',
-      'Cricket & Sports',
-      JSON.stringify(['sports', 'friendship', 'social_meetups']),
-      'Jubilee Hills, Hyderabad',
-      50,
-      'Saturday, Dec 5 • 5:00 PM'
-    );
 
-    insertDiscovery.run(
-      'disc_blr_sports',
-      'community',
-      'Bangalore Turf Football & Weekend Socials',
-      '420 football enthusiasts',
-      '5-a-side floodlit football on premium Astroturf followed by rooftop post-match craft brew chats.',
-      'https://images.unsplash.com/photo-1529900245534-47fbf82a472c?w=800&auto=format&fit=crop&q=80',
-      'Sports & Turf',
-      JSON.stringify(['sports', 'fitness_wellness', 'casual_hangouts']),
-      'Indiranagar, Bangalore',
-      420,
-      'Every Sunday 07:00 PM'
-    );
 
-    insertDiscovery.run(
-      'disc_mum_cafe',
-      'event',
-      'Bandra Sunset Acoustic Jam & Strangers Circle',
-      'Friday, 6:30 PM • 35 attendees',
-      'Bring your guitar or just your voice. An open acoustic music circle and storytelling evening on a Bandra rooftop.',
-      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80',
-      'Acoustic & Arts',
-      JSON.stringify(['casual_hangouts', 'food_culture', 'friendship', 'social_meetups']),
-      'Bandra West, Mumbai',
-      35,
-      'Friday • 06:30 PM'
-    );
+    // 10. Communities: Production clean state (created via genuine community formation & admin verification)
 
-    insertDiscovery.run(
-      'disc_person_aarav',
-      'person',
-      'Aarav Sharma — Community Sports Captain',
-      'Hyderabad Chapter • 24 Meetups Hosted',
-      'Lifelong Hyderabad cricket fanatic and sports host. Loves turning awkward icebreakers into loud team chants.',
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&auto=format&fit=crop&q=80',
-      'Community Host',
-      JSON.stringify(['sports', 'friendship']),
-      'Hyderabad, India',
-      1200,
-      'Active Host'
-    );
 
-    insertDiscovery.run(
-      'disc_person_riya',
-      'person',
-      'Riya Kulkarni — Board Game Strategist & Cafe Curator',
-      'Pune Chapter • 16 Meetups Hosted',
-      'Organizes weekly cafe and board game meetups across Pune. Expert in teaching Catan, Wingspan, and Avalon to first-timers in 5 minutes.',
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&auto=format&fit=crop&q=80',
-      'Community Curator',
-      JSON.stringify(['gaming', 'casual_hangouts', 'friendship']),
-      'Koregaon Park, Pune',
-      840,
-      'Active Host'
-    );
 
-    insertDiscovery.run(
-      'disc_trip_gandikota',
-      'trip',
-      'Gandikota Grand Canyon & Starry Campout',
-      '2 Days Weekend Expedition • 16 Wanderers',
-      'Explore the dramatic George of the Pennar river, stargaze by the campfires, and watch sunrise over the ancient fort ramparts with new friends.',
-      'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800&auto=format&fit=crop&q=80',
-      'Weekend Trips',
-      JSON.stringify(['travel_adventure', 'outdoor_adventures', 'friendship']),
-      'Gandikota, Andhra Pradesh',
-      16,
-      'Dec 19 - 20, 2026'
-    );
 
-    insertDiscovery.run(
-      'disc_trip_lonavala',
-      'trip',
-      'Western Ghats Cloud Trek & Waterfall Camp',
-      'Overnight Weekend Trip • 22 Campers',
-      'Hike through misty cliffs, swim in natural spring pools, and share bonfire stories with strangers turned brothers.',
-      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80',
-      'Mountain Trek',
-      JSON.stringify(['outdoor_adventures', 'travel_adventure', 'fitness_wellness']),
-      'Lonavala, Maharashtra',
-      22,
-      'Dec 26 - 27, 2026'
-    );
-
-    // 9. Seed Pass for Sam Taylor (user@stroom.app) for testing
-    const regularUser = db.prepare("SELECT id FROM users WHERE email = 'user@stroom.app'").get() as { id: string } | undefined;
-    if (regularUser) {
-      db.prepare(`
-        INSERT OR IGNORE INTO event_registrations (id, event_id, user_id, pass_code, qr_token, seat_tier, role_type, checkin_status)
-        VALUES ('reg_sam_01', 'evt_hyd_auction_01', ?, 'STR-HYD-7821', 'stroom_qr_sam_hyd_7821', 'Table #4 Bidder', 'Bidder', 'confirmed')
-      `).run(regularUser.id);
-
-      // Seed Achievements for user
-      const insertAch = db.prepare(`
-        INSERT OR IGNORE INTO user_achievements (id, user_id, badge_key, title, description, icon_name, category)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      insertAch.run('ach_1', regularUser.id, 'first_auction', 'First Auction Ace', 'Participated in a live player bidding session', 'Trophy', 'auction');
-      insertAch.run('ach_2', regularUser.id, 'community_mvp', 'Community MVP', 'Attended 5+ real-world meetups without missing one', 'Award', 'community');
-      insertAch.run('ach_3', regularUser.id, 'smart_bidder', 'Smart Bidder', 'Won a cricket player lot under initial purse cap', 'Sparkles', 'auction');
-      insertAch.run('ach_4', regularUser.id, 'stranger_brother', 'Stranger to Brother', 'Formed a weekend cricket team with strangers', 'Heart', 'social');
-    }
-
-    // 10. Seed Verified Launch Communities (Phase 2)
-    const insertComm = db.prepare(`
-      INSERT OR IGNORE INTO communities (id, name, slug, city_id, category, description, image_url, organizer_name, organizer_role, organizer_avatar, member_count, meeting_schedule, guidelines)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    insertComm.run(
-      'comm_hyd_cricket',
-      'Hyderabad Weekend Cricket Brotherhood',
-      'hyderabad-weekend-cricket',
-      'city_hyd',
-      'Cricket & Sports',
-      'Hyderabad’s premier community for tape-ball, box cricket, turf leagues, and live IPL watch-alongs across Jubilee Hills and Gachibowli.',
-      'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
-      'Aarav Sharma',
-      'STROOM Cricket Captain',
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-      540,
-      'Every Saturday • 06:30 AM IST',
-      'Zero hostility. Equal bowling/batting rotation for all skill levels. Post-match Irani chai & samosas are non-negotiable.'
-    );
-
-    insertComm.run(
-      'comm_pune_cafe',
-      'Pune Coffee, Bun Maska & Deep Talks',
-      'pune-coffee-deep-talks',
-      'city_pune',
-      'Café Meetups',
-      'Slow Sunday morning breakfast meetups, book exchanges, and creative brainstorming at iconic Pune heritage cafes. For strangers who love thoughtful conversations.',
-      'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&auto=format&fit=crop&q=80',
-      'Pooja Kulkarni',
-      'Heritage Cafe Curator',
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop&q=80',
-      380,
-      'Every Sunday • 09:30 AM IST',
-      'Phones away for the first hour of conversation. Open hearts, no gatekeeping, celebrate diverse walks of life.'
-    );
-
-    insertComm.run(
-      'comm_hyd_gaming',
-      'Hitec City Board Games & FIFA Guild',
-      'hitec-city-board-games-fifa',
-      'city_hyd',
-      'Gaming',
-      'From Catan settlements and Avalon bluffing rounds to FIFA PS5 controller battles at Gachibowli lounges. Novices and pros both welcomed.',
-      'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&auto=format&fit=crop&q=80',
-      'Karthik Varma',
-      'Guildmaster',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
-      290,
-      'Bi-Weekly Friday Nights • 07:30 PM IST',
-      'Rules are taught in 5 minutes to all first-timers. Good sportsmanship always wins.'
-    );
-
-    insertComm.run(
-      'comm_pune_outdoors',
-      'Western Ghats Sunrise Trekkers & Cyclists',
-      'pune-sunrise-trekkers',
-      'city_pune',
-      'Cycling & Outdoors',
-      'Dawn pedal rides towards Sinhagad Foothills and scenic weekend treks through Sahyadri cloud passes. Crisp air, hot kanda bhaji, and authentic group camaraderie.',
-      'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&auto=format&fit=crop&q=80',
-      'Rohan Deshmukh',
-      'Certified Outdoor Lead',
-      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80',
-      310,
-      'Every Saturday • 05:30 AM IST',
-      'Leave no trace on the trails. Strictly buddy-system trekking. Helmets mandatory for cycle riders.'
-    );
-
-    insertComm.run(
-      'comm_blr_sports',
-      'Bangalore Turf Futsal & Weekend Socials',
-      'bangalore-turf-futsal',
-      'city_blr',
-      'Cricket & Sports',
-      'Fast-paced 5-a-side floodlit football on premium Indiranagar Astroturf, followed by rooftop discussions and post-game craft brews.',
-      'https://images.unsplash.com/photo-1529900245534-47fbf82a472c?w=800&auto=format&fit=crop&q=80',
-      'Nikhil Menon',
-      'Sports Coordinator',
-      'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=400&auto=format&fit=crop&q=80',
-      420,
-      'Every Sunday • 07:00 PM IST',
-      'Fair play first. Frequent substitutions ensure everybody enjoys equal turf time regardless of experience.'
-    );
-
-    insertComm.run(
-      'comm_mum_acoustic',
-      'Bandra Acoustic Circle & Open Rooftop',
-      'bandra-acoustic-circle',
-      'city_mum',
-      'Creative Communities',
-      'Bring your guitar, ukulele, poetry, or just your voice. An open, unpretentious acoustic jam circle under the Bandra sunset.',
-      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80',
-      'Tara D’Souza',
-      'Creative Lead',
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-      340,
-      'Every Friday • 06:30 PM IST',
-      'All musical ability levels welcomed. Enthusiastic listening is appreciated as much as performing.'
-    );
-
-    insertComm.run(
-      'comm_hyd_founders',
-      'Hyderabad Builders & Tech Founders Circle',
-      'hyderabad-founders-circle',
-      'city_hyd',
-      'Entrepreneurship & Networking',
-      'No pitch contests or vanity metrics. Raw, candid evening conversations between software developers, bootstrappers, and indie founders.',
-      'https://images.unsplash.com/photo-1515187029135-18ee286d815b?w=800&auto=format&fit=crop&q=80',
-      'Siddharth Rao',
-      'Tech Curator',
-      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&auto=format&fit=crop&q=80',
-      260,
-      'Alternate Wednesdays • 07:00 PM IST',
-      'Chatham House Rule. Share genuine mistakes, unreleased prototypes, and practical technical insights.'
-    );
-
-    insertComm.run(
-      'comm_hyd_cinema',
-      'Jubilee Hills Indie Film & Cinema Club',
-      'jubilee-hills-cinema-club',
-      'city_hyd',
-      'Movie Screenings',
-      'Rooftop projector screenings of regional indie shorts, cult classics, and festival selections followed by spirited cafe discussions on cinema craft.',
-      'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&auto=format&fit=crop&q=80',
-      'Ananya Roy',
-      'Film Host',
-      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80',
-      210,
-      'Every Thursday Evening • 07:00 PM IST',
-      'Phones on silent during screenings. Spirited artistic debates encouraged.'
-    );
-
-    // Seed default membership for demo user
-    if (regularUser) {
-      db.prepare(`
-        INSERT OR IGNORE INTO community_members (id, community_id, user_id, role)
-        VALUES ('cm_01', 'comm_hyd_cricket', ?, 'member')
-      `).run(regularUser.id);
-    }
   });
 
   transaction();
@@ -2067,261 +1455,7 @@ function migratePhase5Tables() {
     const eventCols = (db.prepare('PRAGMA table_info(events)').all() as { name: string }[]).map(c => c.name);
     if (!eventCols.includes('partner_operational_notes')) db.prepare('ALTER TABLE events ADD COLUMN partner_operational_notes TEXT').run();
 
-    // Seed dedicated demo Partner users (Hyderabad & Pune)
-    const partnerPassHash = hashPassword('Partner@123');
-    db.prepare(`
-      INSERT OR IGNORE INTO users (id, email, password_hash, full_name, display_name, avatar_url, role, member_id, phone, city, bio, onboarding_status)
-      VALUES (
-        'usr_partner_001',
-        'partner@stroom.app',
-        ?,
-        'Aditya Reddy (Partner)',
-        'Aditya Reddy',
-        'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=300&auto=format&fit=crop&q=80',
-        'venue_partner',
-        'STR-PTR-0001',
-        '+91 98490 12345',
-        'Hyderabad',
-        'Hospitality & community venue partner managing Jubilee Hills & Gachibowli spaces.',
-        'COMPLETED'
-      )
-    `).run(partnerPassHash);
-
-    db.prepare(`
-      INSERT OR IGNORE INTO users (id, email, password_hash, full_name, display_name, avatar_url, role, member_id, phone, city, bio, onboarding_status)
-      VALUES (
-        'usr_partner_pune_001',
-        'partner.pune@stroom.app',
-        ?,
-        'Pooja Kulkarni (Partner)',
-        'Pooja Kulkarni',
-        'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300&auto=format&fit=crop&q=80',
-        'venue_partner',
-        'STR-PTR-0002',
-        '+91 98220 98765',
-        'Pune',
-        'Pune cultural & hospitality partner for live meetups and community drafts.',
-        'COMPLETED'
-      )
-    `).run(partnerPassHash);
-
-    // Seed Verified Partner Accounts linked to existing venues
-    db.prepare(`
-      INSERT OR IGNORE INTO partner_accounts (
-        id, owner_user_id, business_name, business_logo, cover_url, category, description,
-        contact_person, contact_email, contact_phone, website, social_links_json,
-        city, address, maps_url, capacity, facilities_json, operating_hours_json,
-        collaboration_interests_json, verification_status, verification_notes,
-        onboarding_step, partnership_start_date, partnership_tier
-      ) VALUES (
-        'ptr_thirdwave_hyd',
-        'usr_partner_001',
-        'Third Wave Coffee & Lounge — Jubilee Hills',
-        'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=200&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=1000&auto=format&fit=crop&q=80',
-        'Café & Restaurant',
-        'Specialty coffee roastery and spacious upstairs community loft built for interactive social mixers, board game nights, and social meetups.',
-        'Aditya Reddy',
-        'partner@stroom.app',
-        '+91 98490 12345',
-        'https://thirdwavecoffeeroasters.com',
-        '{"instagram":"@thirdwavecoffeeindia","linkedin":"third-wave-coffee"}',
-        'Hyderabad',
-        'Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033',
-        'https://maps.google.com/?q=Third+Wave+Coffee+Jubilee+Hills+Hyderabad',
-        75,
-        '["High-Speed Wi-Fi","Projector & HDMI","Acoustic Mic Setup","Dedicated Mezzanine Floor","Specialty Espresso Bar","Valet Parking"]',
-        '{"mon_fri":"08:00 AM - 11:30 PM","sat_sun":"08:00 AM - 12:30 AM"}',
-        '["Host community events","Café meetups","Sports tournaments","Gaming events","Brand promotions"]',
-        'Verified',
-        'Verified flagship hospitality partner for Hyderabad launch.',
-        5,
-        '2026-09-15',
-        'Gold Venue Partner'
-      )
-    `).run();
-
-    db.prepare(`
-      INSERT OR IGNORE INTO partner_accounts (
-        id, owner_user_id, business_name, business_logo, cover_url, category, description,
-        contact_person, contact_email, contact_phone, website, social_links_json,
-        city, address, maps_url, capacity, facilities_json, operating_hours_json,
-        collaboration_interests_json, verification_status, verification_notes,
-        onboarding_step, partnership_start_date, partnership_tier
-      ) VALUES (
-        'ptr_onegolf_hyd',
-        'usr_partner_001',
-        'OneGolf Brewery & Sports Arena',
-        'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=200&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=1000&auto=format&fit=crop&q=80',
-        'Cricket & Sports Venue',
-        'Floodlit sports turf, box cricket nets, and open-air dining deck in Gachibowli Financial District.',
-        'Aditya Reddy',
-        'partner@stroom.app',
-        '+91 97000 54321',
-        'https://onegolfsports.in',
-        '{"instagram":"@onegolfhyderabad"}',
-        'Hyderabad',
-        'Financial District, Gachibowli, Hyderabad, Telangana 500032',
-        'https://maps.google.com/?q=OneGolf+Gachibowli+Hyderabad',
-        150,
-        '["Floodlit Box Cricket Turf","Locker & Shower Rooms","Live Scoreboard Screen","Outdoor Deck Seating","First Aid Kit"]',
-        '{"mon_fri":"06:00 AM - 11:00 PM","sat_sun":"05:30 AM - 11:30 PM"}',
-        '["Sports activities","Box cricket tournaments","Fitness activities","Special campaigns"]',
-        'Verified',
-        'Verified Flagship Sports Arena in Hyderabad.',
-        5,
-        '2026-10-01',
-        'Flagship Sports Arena'
-      )
-    `).run();
-
-    db.prepare(`
-      INSERT OR IGNORE INTO partner_accounts (
-        id, owner_user_id, business_name, business_logo, cover_url, category, description,
-        contact_person, contact_email, contact_phone, website, social_links_json,
-        city, address, maps_url, capacity, facilities_json, operating_hours_json,
-        collaboration_interests_json, verification_status, verification_notes,
-        onboarding_step, partnership_start_date, partnership_tier
-      ) VALUES (
-        'ptr_social_pune',
-        'usr_partner_pune_001',
-        'FC Road Social — Pune Hub',
-        'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=200&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1000&auto=format&fit=crop&q=80',
-        'Event Space & Co-working',
-        'Iconic Pune neighborhood social club combining daytime co-working spaces with high-energy evening community rooms.',
-        'Pooja Kulkarni',
-        'partner.pune@stroom.app',
-        '+91 98220 98765',
-        'https://socialoffline.in',
-        '{"instagram":"@socialoffline"}',
-        'Pune',
-        'Fergusson College Road, Shivajinagar, Pune, Maharashtra 411004',
-        'https://maps.google.com/?q=FC+Road+Social+Pune',
-        100,
-        '["Stage & PA Audio","Dedicated Event Mezzanine","Full Kitchen & Bar","Co-working Power Outlets","Wi-Fi"]',
-        '{"mon_fri":"09:00 AM - 11:30 PM","sat_sun":"09:00 AM - 01:00 AM"}',
-        '["Host community events","College collaborations","Sports tournaments","Gaming events"]',
-        'Verified',
-        'Verified Pune flagship partner.',
-        5,
-        '2026-10-10',
-        'Gold Venue Partner'
-      )
-    `).run();
-
-    // Seed partner_users links
-    db.prepare("INSERT OR IGNORE INTO partner_users (id, partner_id, user_id, partner_role) VALUES ('pu_001', 'ptr_thirdwave_hyd', 'usr_partner_001', 'owner')").run();
-    db.prepare("INSERT OR IGNORE INTO partner_users (id, partner_id, user_id, partner_role) VALUES ('pu_002', 'ptr_onegolf_hyd', 'usr_partner_001', 'owner')").run();
-    db.prepare("INSERT OR IGNORE INTO partner_users (id, partner_id, user_id, partner_role) VALUES ('pu_003', 'ptr_social_pune', 'usr_partner_pune_001', 'owner')").run();
-
-    // Link existing venues and coupons to partner_accounts
-    db.prepare("UPDATE venues SET partner_id = 'ptr_thirdwave_hyd', facilities_json = '[\"Wi-Fi\",\"Projector\",\"Acoustic Mic\",\"Valet Parking\"]', event_spaces_json = '[\"Jubilee Loft (60 pax)\",\"Patio Deck (15 pax)\"]' WHERE id = 'ven_hyd_thirdwave' AND partner_id IS NULL").run();
-    db.prepare("UPDATE venues SET partner_id = 'ptr_onegolf_hyd', facilities_json = '[\"Floodlit Turf\",\"Lockers\",\"Deck Dining\"]', event_spaces_json = '[\"Turf Arena A (80 pax)\",\"Brewery Terrace (70 pax)\"]' WHERE id = 'ven_hyd_onegolf' AND partner_id IS NULL").run();
-    db.prepare("UPDATE venues SET partner_id = 'ptr_social_pune', facilities_json = '[\"PA Audio\",\"Event Stage\",\"Co-working Zone\"]', event_spaces_json = '[\"Main Mezzanine (100 pax)\"]' WHERE id = 'ven_pune_social' AND partner_id IS NULL").run();
-
-    db.prepare("UPDATE coupons SET partner_id = 'ptr_thirdwave_hyd', offer_category = 'percentage', approval_status = 'Active', valid_from = '2026-09-15', terms_conditions = 'Valid on presentation of active STROOM digital pass during scheduled community hours.' WHERE id = 'cpn_hyd_01' AND partner_id IS NULL").run();
-    db.prepare("UPDATE coupons SET partner_id = 'ptr_social_pune', offer_category = 'group', approval_status = 'Active', valid_from = '2026-10-10', terms_conditions = 'Valid once per STROOM verified attendee per evening.' WHERE id = 'cpn_pune_02' AND partner_id IS NULL").run();
-
-    // Seed verified coupon redemption sample linked to existing coupon so ledger reflects actual activity
-    const sampleUser = db.prepare("SELECT id FROM users WHERE email = 'user@stroom.app'").get() as { id: string } | undefined;
-    if (sampleUser) {
-      db.prepare(`
-        INSERT OR IGNORE INTO coupon_redemptions (id, coupon_id, venue_id, partner_id, event_id, user_id, verified_by_user_id, pass_code, order_amount, purchase_verified, notes, redeemed_at)
-        VALUES ('red_seed_01', 'cpn_hyd_01', 'ven_hyd_thirdwave', 'ptr_thirdwave_hyd', 'evt_hyd_auction_01', ?, 'usr_partner_001', 'STR-HYD-7821', 640, 1, 'Verified pre-auction cold brew & sandwich bill', datetime('now', '-3 days'))
-      `).run(sampleUser.id);
-    }
-
-    // Seed Collaborations (1 Scheduled/Confirmed linked to flagship auction + 1 Proposal Sent awaiting partner decision)
-    db.prepare(`
-      INSERT OR IGNORE INTO partner_collaborations (
-        id, partner_id, venue_id, event_id, initiated_by, organizer_name,
-        event_name, event_category, description, proposed_date, proposed_time,
-        expected_attendance, target_audience, partner_responsibilities,
-        stroom_responsibilities, marketing_plan, commercial_arrangement,
-        special_requirements, status, timeline_json
-      ) VALUES (
-        'collab_hyd_01',
-        'ptr_thirdwave_hyd',
-        'ven_hyd_thirdwave',
-        'evt_hyd_auction_01',
-        'admin',
-        'Aarav Sharma (STROOM Community Lead)',
-        'STROOM Hyderabad Premier Turf Cricket Championship',
-        'cricket',
-        'Interactive live community box cricket tournament with 5 team squads and guided networking.',
-        '2026-11-28',
-        '5:00 PM IST',
-        60,
-        'Cricket enthusiasts, young professionals, startup builders in Hyderabad (ages 21-35)',
-        'Reserve Jubilee Hills upstairs loft (60 seats), set up team roundtables, honor STROOMJUBILEE20 voucher at register.',
-        'Manage all participant ticketing & QR door check-ins, supply event kit & display, promote across Hyderabad circles.',
-        'Featured event card on STROOM Discover & WhatsApp communities + co-branded post-event highlights reel.',
-        'Zero venue rental fee; guaranteed F&B menu access with 20% member offer (no minimum spend guarantee).',
-        'HDMI connection to 75-inch TV + 2 wireless handheld microphones.',
-        'Scheduled',
-        '[{"step":"Collaboration Approved","date":"2026-10-18","completed":true},{"step":"Event Published","date":"2026-10-20","completed":true},{"step":"Registrations Opened","date":"2026-10-21","completed":true},{"step":"Event Reminders Scheduled","date":"2026-11-27","completed":false}]'
-      )
-    `).run();
-
-    db.prepare(`
-      INSERT OR IGNORE INTO partner_collaborations (
-        id, partner_id, venue_id, event_id, initiated_by, organizer_name,
-        event_name, event_category, description, proposed_date, proposed_time,
-        expected_attendance, target_audience, partner_responsibilities,
-        stroom_responsibilities, marketing_plan, commercial_arrangement,
-        special_requirements, status, timeline_json
-      ) VALUES (
-        'collab_hyd_02',
-        'ptr_thirdwave_hyd',
-        'ven_hyd_thirdwave',
-        NULL,
-        'admin',
-        'STROOM Experiences Desk',
-        'Jubilee Hills Specialty Pour-Over & Strangers Storytelling Morning',
-        'cafe_meetup',
-        'Curated Sunday morning coffee tasting flight + structured 1-on-1 storytelling table rotations for newcomers to Hyderabad.',
-        '2026-12-06',
-        '10:00 AM IST',
-        45,
-        'Newcomers to Hyderabad, coffee lovers, creatives & remote workers',
-        'Host curated tasting table for up to 45 participants in morning off-peak hours (10 AM - 12:30 PM).',
-        'Publish listing, handle curated seat registrations, host guided icebreaker rounds, manage QR attendance verification.',
-        'Targeted push notification to Hyderabad Café & Conversations interest members.',
-        'Fixed per-guest tasting flight package agreed prior to publication; subject to actual confirmed registrations.',
-        'Quiet acoustic background music during storytelling circle.',
-        'Proposal Sent',
-        '[{"step":"Proposal Sent by STROOM","date":"2026-11-10","completed":true}]'
-      )
-    `).run();
-
-    // Seed Venue Availability slots
-    db.prepare(`
-      INSERT OR IGNORE INTO venue_availability (id, venue_id, partner_id, date, time_slot, status, event_id, collaboration_id, notes)
-      VALUES
-        ('va_hyd_01', 'ven_hyd_thirdwave', 'ptr_thirdwave_hyd', '2026-11-28', 'evening', 'booked', 'evt_hyd_auction_01', 'collab_hyd_01', 'Confirmed: STROOM Premier Cricket Auction 2026'),
-        ('va_hyd_02', 'ven_hyd_thirdwave', 'ptr_thirdwave_hyd', '2026-12-06', 'morning', 'proposed', NULL, 'collab_hyd_02', 'Proposed: Sunday Pour-Over & Storytelling Morning'),
-        ('va_hyd_03', 'ven_hyd_thirdwave', 'ptr_thirdwave_hyd', '2026-12-12', 'evening', 'available', NULL, NULL, 'Open for weekend community mixer'),
-        ('va_hyd_04', 'ven_hyd_thirdwave', 'ptr_thirdwave_hyd', '2026-12-13', 'afternoon', 'unavailable', NULL, NULL, 'Private internal staff roasting workshop')
-    `).run();
-
-    // Seed Partner Communications & Audit Log
-    db.prepare(`
-      INSERT OR IGNORE INTO partner_communications (id, partner_id, event_id, collaboration_id, sender_name, sender_role, subject, message, type, is_read, created_at)
-      VALUES
-        ('pcomm_01', 'ptr_thirdwave_hyd', 'evt_hyd_auction_01', 'collab_hyd_01', 'Aarav Sharma (STROOM)', 'coordinator', 'Table Setup & Audio Check for Nov 28 Auction', 'Hi Aditya! We have 48 confirmed bidders for Nov 28. Please keep 5 round tables arranged near the projector wall by 4:15 PM for setup.', 'operational_note', 0, datetime('now', '-1 day')),
-        ('pcomm_02', 'ptr_thirdwave_hyd', NULL, 'collab_hyd_02', 'STROOM Partnerships Desk', 'coordinator', 'New Collaboration Proposal: Dec 6 Coffee Storytelling', 'We sent a proposal for a Sunday morning 45-seat off-peak experience on Dec 6. Review and accept or suggest another date inside Collaborations.', 'announcement', 0, datetime('now', '-6 hours')),
-        ('pcomm_03', 'ptr_social_pune', NULL, NULL, 'STROOM Pune Desk', 'coordinator', 'Welcome to STROOM Verified Partners', 'Your FC Road Social venue profile is Verified and active in the Pune hub.', 'verification_update', 1, datetime('now', '-5 days'))
-    `).run();
-
-    db.prepare(`
-      INSERT OR IGNORE INTO partner_audit_logs (id, partner_id, actor_name, action, entity_type, entity_id, details_json, created_at)
-      VALUES
-        ('paud_01', 'ptr_thirdwave_hyd', 'System Admin', 'PARTNER_VERIFIED', 'partner_account', 'ptr_thirdwave_hyd', '{"tier":"Gold Venue Partner"}', datetime('now', '-30 days')),
-        ('paud_02', 'ptr_thirdwave_hyd', 'Aarav Sharma', 'COLLABORATION_SCHEDULED', 'collaboration', 'collab_hyd_01', '{"event_id":"evt_hyd_auction_01"}', datetime('now', '-20 days')),
-        ('paud_03', 'ptr_thirdwave_hyd', 'STROOM Partnerships Desk', 'PROPOSAL_SENT', 'collaboration', 'collab_hyd_02', '{"proposed_date":"2026-12-06"}', datetime('now', '-6 hours'))
-    `).run();
+    // Partner accounts, venues, collaborations, and campaigns: Production clean state (created via genuine partner applications & admin approvals)
   } catch (err) {
     console.warn('[migratePhase5Tables] Notice:', err);
   }
@@ -2428,16 +1562,6 @@ function migratePhase6Tables() {
     db.prepare("UPDATE cities SET is_featured = 1, description = COALESCE(description, 'Flagship STROOM Launch City — Cricket Auctions, Cafés & Founders Circles'), image_url = COALESCE(image_url, 'https://images.unsplash.com/photo-1588416936097-41850ab3d86d?w=800&auto=format&fit=crop&q=80') WHERE id = 'city_hyd'").run();
     db.prepare("UPDATE cities SET is_featured = 1, description = COALESCE(description, 'Premier Expansion Hub — Heritage Cafés, Gaming & Sahyadri Trails'), image_url = COALESCE(image_url, 'https://images.unsplash.com/photo-1567157577867-05ccb1388e66?w=800&auto=format&fit=crop&q=80') WHERE id = 'city_pune'").run();
 
-    // Seed additional staff demo accounts for RBAC verification
-    const staffPass = hashPassword('Staff@123');
-    db.prepare(`
-      INSERT OR IGNORE INTO users (id, email, password_hash, full_name, display_name, role, member_id, city, account_status, onboarding_status)
-      VALUES
-        ('usr_superadmin_001', 'superadmin@stroom.app', ?, 'Vikramaditya Rao (Super Admin)', 'Vikramaditya Rao', 'super_admin', 'STR-SA-0001', 'Hyderabad', 'active', 'COMPLETED'),
-        ('usr_checkin_001', 'checkin@stroom.app', ?, 'Meera Nair (Door Check-in)', 'Meera Nair', 'checkin_staff', 'STR-STF-0002', 'Hyderabad', 'active', 'COMPLETED'),
-        ('usr_eventmgr_001', 'events@stroom.app', ?, 'Rohan Kapoor (Event Manager)', 'Rohan Kapoor', 'event_manager', 'STR-MGR-0003', 'Pune', 'active', 'COMPLETED')
-    `).run(hashPassword('Admin@123'), staffPass, staffPass);
-
     // Seed default platform settings (strictly non-secret operational defaults)
     const insertSetting = db.prepare(`
       INSERT OR IGNORE INTO platform_settings (key, category, value_json, description, updated_by)
@@ -2473,19 +1597,7 @@ function migratePhase6Tables() {
       respectMemberOptOuts: true,
     }), 'Messaging delivery configuration');
 
-    // Seed community moderation sample items
-    const regUser = db.prepare("SELECT id, full_name FROM users WHERE email = 'user@stroom.app'").get() as { id: string; full_name: string } | undefined;
-    db.prepare(`
-      INSERT OR IGNORE INTO community_posts (id, community_id, author_user_id, author_name, title, content, status, report_reason)
-      VALUES
-        ('post_001', 'comm_hyd_cricket', ?, ?, 'Looking for 2 bowlers for Saturday 6:30 AM Gachibowli Turf Match', 'Hey team! Anyone up for warm-up nets at OneGolf this Saturday morning before the auction draft?', 'Published', NULL),
-        ('post_002', 'comm_pune_cafe', ?, ?, 'Unauthorized external ticket resale link — [FLAGGED]', 'Message me outside STROOM for discounted passes at triple price.', 'Reported', 'Suspected spam / off-platform ticket scalping')
-    `).run(
-      regUser?.id || null,
-      regUser?.full_name || 'Sam Taylor',
-      regUser?.id || null,
-      regUser?.full_name || 'Sam Taylor'
-    );
+
   } catch (err) {
     console.warn('[migratePhase6Tables] Notice:', err);
   }
@@ -2519,9 +1631,11 @@ function migrateHistoricalEventRestrictions() {
     },
     {
       name: 'auction_rooms',
-      matchUnsafe: /REFERENCES\s+events\s*\(\s*id\s*\)\s+ON\s+DELETE\s+CASCADE/i,
+      matchUnsafe: /(?:event_id\s+TEXT\s+(?:UNIQUE\s+)?NOT\s+NULL|REFERENCES\s+events\s*\(\s*id\s*\)\s+ON\s+DELETE\s+(?:CASCADE|RESTRICT))/i,
       transformSql: (sql) =>
-        sql.replace(/REFERENCES\s+events\s*\(\s*id\s*\)\s+ON\s+DELETE\s+CASCADE/i, 'REFERENCES events(id) ON DELETE RESTRICT'),
+        sql
+          .replace(/event_id\s+TEXT\s+(?:UNIQUE\s+)?NOT\s+NULL\s+REFERENCES\s+events\s*\(\s*id\s*\)\s+ON\s+DELETE\s+(?:CASCADE|RESTRICT)/i, 'event_id TEXT REFERENCES events(id) ON DELETE SET NULL')
+          .replace(/REFERENCES\s+events\s*\(\s*id\s*\)\s+ON\s+DELETE\s+(?:CASCADE|RESTRICT)/i, 'REFERENCES events(id) ON DELETE SET NULL'),
       postIndexes: [
         'CREATE INDEX IF NOT EXISTS idx_auction_rooms_status ON auction_rooms(status)',
       ],

@@ -16,8 +16,10 @@ import {
   Trophy,
   Flame,
   Activity,
-  Coffee
+  Coffee,
+  User as UserIcon
 } from 'lucide-react';
+import { isUploadedPhoto } from '../../utils/avatarUtils';
 
 interface PublicProfileModalProps {
   memberIdOrId: string;
@@ -139,11 +141,11 @@ export const PublicProfileModal: React.FC<PublicProfileModalProps> = ({
               <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4">
                 <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
                   <div className="w-24 h-24 rounded-2xl bg-white p-1 border-2 border-stroom-orange shadow-lg shrink-0 overflow-hidden">
-                    {profile.avatarUrl ? (
+                    {isUploadedPhoto(profile.avatarUrl) ? (
                       <img src={profile.avatarUrl} alt={profile.displayName} className="w-full h-full rounded-xl object-cover" />
                     ) : (
-                      <div className="w-full h-full rounded-xl bg-gradient-to-tr from-stroom-orange to-stroom-deep flex items-center justify-center text-white font-black text-3xl">
-                        {profile.displayName?.charAt(0) || 'M'}
+                      <div className="w-full h-full rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-400">
+                        <UserIcon className="w-10 h-10" />
                       </div>
                     )}
                   </div>

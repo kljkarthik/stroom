@@ -140,15 +140,20 @@ export async function ensureMediaUploadsTable(): Promise<void> {
       resource_type TEXT DEFAULT 'image',
       original_filename TEXT,
       folder TEXT,
+      image_data TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `;
 
   try {
     await adapter.execute(ddl);
+    try {
+      await adapter.execute('ALTER TABLE media_uploads ADD COLUMN image_data TEXT');
+    } catch {
+      // Column already exists
+    }
     tableEnsured = true;
   } catch (err: any) {
-    // If table already exists or harmless error, mark ensured
     if (err?.message?.includes('already exists')) {
       tableEnsured = true;
     } else {
@@ -159,7 +164,8 @@ export async function ensureMediaUploadsTable(): Promise<void> {
 
 /**
  * Uploads an in-memory buffer directly to Cloudinary without writing to local disk.
- * If Cloudinary is not configured (e.g. dev/test mode), creates a safe mock record.
+ * If Cloudinary is not configured (e.g. dev/test mode), stores the genuine user-uploaded buffer
+ * in media_uploads so it is served accurately without mock images.
  */
 export async function uploadImageBuffer(
   buffer: Buffer,
@@ -174,7 +180,7 @@ export async function uploadImageBuffer(
   const targetFolder = `stroom/${(options.folder || 'general').replace(/[^a-zA-Z0-9_\-\/]/g, '')}`;
   const uploadId = `upl_${crypto.randomUUID()}`;
 
-  // If Cloudinary is not configured, fallback gracefully in non-production
+  // If Cloudinary is not configured, preserve genuine user image buffer in database
   if (!config.isCloudinaryConfigured) {
     if (config.isProduction) {
       throw new Error(
@@ -182,17 +188,22 @@ export async function uploadImageBuffer(
       );
     }
 
-    console.warn('[STROOM Upload Dev] Cloudinary credentials not detected; using secure dev mock upload.');
+    const detected = validateImageBuffer(
+      buffer,
+      options.originalFilename?.endsWith('.png') ? 'image/png' : options.originalFilename?.endsWith('.webp') ? 'image/webp' : 'image/jpeg'
+    );
+    const format = detected.detectedType || 'jpeg';
+    const base64Data = buffer.toString('base64');
     const mockPublicId = `${targetFolder}/${uploadId}`;
-    const mockSecureUrl = `https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80`;
+    const fileUrl = `/api/upload/file/${uploadId}.${format}`;
 
     const result: UploadResult = {
       id: uploadId,
       public_id: mockPublicId,
-      secure_url: mockSecureUrl,
-      url: mockSecureUrl,
-      format: 'jpg',
-      width: 1200,
+      secure_url: fileUrl,
+      url: fileUrl,
+      format,
+      width: 800,
       height: 800,
       bytes: buffer.length,
       folder: targetFolder,
@@ -200,7 +211,7 @@ export async function uploadImageBuffer(
       created_at: new Date().toISOString(),
     };
 
-    await recordUpload(result, options.userId);
+    await recordUpload(result, options.userId, base64Data);
     return result;
   }
 
@@ -249,12 +260,12 @@ export async function uploadImageBuffer(
 /**
  * Records upload metadata in media_uploads table.
  */
-async function recordUpload(data: UploadResult, userId?: string): Promise<void> {
+async function recordUpload(data: UploadResult, userId?: string, imageData?: string): Promise<void> {
   const adapter = getDatabaseAdapter();
   try {
     await adapter.execute(
-      `INSERT INTO media_uploads (id, user_id, public_id, secure_url, url, format, width, height, bytes, resource_type, original_filename, folder, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO media_uploads (id, user_id, public_id, secure_url, url, format, width, height, bytes, resource_type, original_filename, folder, image_data, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         data.id,
         userId || null,
@@ -268,6 +279,7 @@ async function recordUpload(data: UploadResult, userId?: string): Promise<void> 
         'image',
         data.original_filename || null,
         data.folder,
+        imageData || null,
         data.created_at,
       ]
     );

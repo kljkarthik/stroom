@@ -9,15 +9,17 @@ import {
   Check,
   Plus,
   X,
-  AlertCircle
+  AlertCircle,
+  User as UserIcon
 } from 'lucide-react';
+import { isUploadedPhoto } from '../../utils/avatarUtils';
 
 interface ProfileViewProps {
   onRetakeQuiz: () => void;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ onRetakeQuiz }) => {
-  const { user, logout, loginAsDemoUser, refreshUser } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -69,11 +71,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onRetakeQuiz }) => {
       {/* Profile Header */}
       <div className="p-6 rounded-3xl bg-white border border-stroom-borderLight shadow-sm mb-6">
         <div className="flex items-center gap-4">
-          <img
-            src={user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-            alt={user?.full_name}
-            className="w-16 h-16 rounded-2xl object-cover border-2 border-stroom-orange shadow-md"
-          />
+          {isUploadedPhoto(user?.avatar_url) ? (
+            <img
+              src={user!.avatar_url!}
+              alt={user?.full_name}
+              className="w-16 h-16 rounded-2xl object-cover border-2 border-stroom-orange shadow-md"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-400 shadow-md">
+              <UserIcon className="w-8 h-8" />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-black text-stroom-black truncate font-display">{user?.full_name}</h2>
@@ -207,32 +215,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onRetakeQuiz }) => {
                 <span>Save Preferences</span>
               </>
             )}
-          </button>
-        </div>
-      </div>
-
-      {/* Interactive QA & Demo Testing Panel */}
-      <div className="p-6 rounded-3xl bg-white border border-stroom-borderLight shadow-sm mb-6">
-        <h4 className="text-xs font-black text-stroom-deep uppercase tracking-wider mb-1">
-          One-Click QA Testing Switcher
-        </h4>
-        <p className="text-[11px] text-stroom-charcoal/70 mb-3">
-          Instantly simulate every user state for testing the onboarding flow:
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button
-            onClick={() => loginAsDemoUser('newUser')}
-            className="p-3 rounded-xl bg-stroom-cream/40 hover:bg-stroom-cream border border-stroom-borderLight text-xs font-bold text-stroom-black text-left transition-colors flex items-center justify-between"
-          >
-            <span>Simulate First-Time Login (NOT_STARTED)</span>
-            <RotateCcw className="w-3.5 h-3.5 text-stroom-orange" />
-          </button>
-          <button
-            onClick={() => loginAsDemoUser('completedUser')}
-            className="p-3 rounded-xl bg-stroom-cream/40 hover:bg-stroom-cream border border-stroom-borderLight text-xs font-bold text-stroom-black text-left transition-colors flex items-center justify-between"
-          >
-            <span>Simulate Returning User (COMPLETED)</span>
-            <Check className="w-3.5 h-3.5 text-emerald-600" />
           </button>
         </div>
       </div>

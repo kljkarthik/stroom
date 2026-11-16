@@ -1010,6 +1010,178 @@ router.delete('/events/:id', requirePermission('events.delete'), async (req: Aut
   }
 });
 
+// =========================================================================
+// EVENT SUBMISSIONS (COMMUNITY EXPERIENCE PROPOSALS)
+// =========================================================================
+
+router.get('/event-submissions', requirePermission('events.view'), async (req: AuthRequest, res: Response) => {
+  try {
+    const adapter = getDatabaseAdapter();
+    const { status, city, category, search } = req.query as Record<string, string>;
+
+    let query = `
+      SELECT
+        s.*,
+        u.full_name as submitter_user_name,
+        u.email as submitter_user_email,
+        r.full_name as reviewer_name
+      FROM event_submissions s
+      LEFT JOIN users u ON s.user_id = u.id
+      LEFT JOIN users r ON s.reviewed_by = r.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (status && status !== 'all') {
+      query += ` AND s.status = ?`;
+      params.push(status.toUpperCase());
+    }
+
+    if (city && city !== 'all') {
+      query += ` AND LOWER(s.city) = LOWER(?)`;
+      params.push(city);
+    }
+
+    if (category && category !== 'all') {
+      query += ` AND s.category = ?`;
+      params.push(category);
+    }
+
+    if (search && search.trim()) {
+      const q = `%${search.trim()}%`;
+      query += ` AND (s.title LIKE ? OR s.organizer_name LIKE ? OR s.organizer_email LIKE ? OR s.organization_name LIKE ? OR s.id LIKE ?)`;
+      params.push(q, q, q, q, q);
+    }
+
+    query += ` ORDER BY s.created_at DESC`;
+
+    const submissions = await adapter.query(query, params);
+
+    // Compute metrics
+    const metricsResult = await adapter.queryOne<{
+      total: number;
+      pending: number;
+      under_review: number;
+      approved: number;
+      rejected: number;
+    }>(`
+      SELECT
+        COUNT(*) as total,
+        COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending,
+        COUNT(CASE WHEN status = 'UNDER_REVIEW' THEN 1 END) as under_review,
+        COUNT(CASE WHEN status = 'APPROVED' THEN 1 END) as approved,
+        COUNT(CASE WHEN status = 'REJECTED' THEN 1 END) as rejected
+      FROM event_submissions
+    `);
+
+    return res.json({
+      success: true,
+      submissions,
+      metrics: metricsResult || { total: 0, pending: 0, under_review: 0, approved: 0, rejected: 0 }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch event submissions' });
+  }
+});
+
+router.get('/event-submissions/:id', requirePermission('events.view'), async (req: AuthRequest, res: Response) => {
+  try {
+    const adapter = getDatabaseAdapter();
+    const { id } = req.params;
+
+    const submission = await adapter.queryOne(`
+      SELECT
+        s.*,
+        u.full_name as submitter_user_name,
+        u.email as submitter_user_email,
+        r.full_name as reviewer_name
+      FROM event_submissions s
+      LEFT JOIN users u ON s.user_id = u.id
+      LEFT JOIN users r ON s.reviewed_by = r.id
+      WHERE s.id = ?
+    `, [id]);
+
+    if (!submission) {
+      return res.status(404).json({ error: 'Event submission not found' });
+    }
+
+    return res.json({ success: true, submission });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch submission details' });
+  }
+});
+
+router.patch('/event-submissions/:id/status', requirePermission('events.edit'), async (req: AuthRequest, res: Response) => {
+  try {
+    const adapter = getDatabaseAdapter();
+    const { id } = req.params;
+    const { status, admin_notes } = req.body;
+
+    const validStatuses = ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'];
+    if (!status || !validStatuses.includes(status.toUpperCase())) {
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const existing = await adapter.queryOne<any>('SELECT * FROM event_submissions WHERE id = ?', [id]);
+    if (!existing) {
+      return res.status(404).json({ error: 'Event submission not found' });
+    }
+
+    const normalizedStatus = status.toUpperCase();
+    const now = new Date().toISOString();
+
+    await adapter.execute(`
+      UPDATE event_submissions
+      SET
+        status = ?,
+        admin_notes = COALESCE(?, admin_notes),
+        reviewed_by = ?,
+        reviewed_at = ?,
+        updated_at = ?
+      WHERE id = ?
+    `, [
+      normalizedStatus,
+      admin_notes !== undefined ? admin_notes : null,
+      req.user!.id,
+      now,
+      now,
+      id
+    ]);
+
+    await recordAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.full_name,
+      actorRole: req.user!.role,
+      action: 'EVENT_SUBMISSION_STATUS_UPDATED',
+      entityType: 'event_submission',
+      entityId: id,
+      beforeData: { status: existing.status, admin_notes: existing.admin_notes },
+      afterData: { status: normalizedStatus, admin_notes: admin_notes !== undefined ? admin_notes : existing.admin_notes },
+      result: 'success'
+    });
+
+    const updated = await adapter.queryOne(`
+      SELECT
+        s.*,
+        u.full_name as submitter_user_name,
+        u.email as submitter_user_email,
+        r.full_name as reviewer_name
+      FROM event_submissions s
+      LEFT JOIN users u ON s.user_id = u.id
+      LEFT JOIN users r ON s.reviewed_by = r.id
+      WHERE s.id = ?
+    `, [id]);
+
+    return res.json({
+      success: true,
+      message: `Submission status successfully updated to ${normalizedStatus}`,
+      submission: updated
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to update submission status' });
+  }
+});
+
 router.get('/registrations', requirePermission('events.view'), async (req: AuthRequest, res: Response) => {
   try {
     const adapter = getDatabaseAdapter();

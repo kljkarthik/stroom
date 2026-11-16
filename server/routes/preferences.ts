@@ -318,6 +318,11 @@ router.put('/me/profile', requireAuth, async (req: AuthRequest, res: Response) =
     const privacyJson = privacy_settings ? JSON.stringify(privacy_settings) : undefined;
     const notifJson = notification_settings ? JSON.stringify(notification_settings) : undefined;
 
+    const hasAvatar = 'avatar_url' in req.body;
+    const avatarToSave = hasAvatar ? (avatarCheck.value || null) : null;
+    const hasCover = 'cover_url' in req.body;
+    const coverToSave = hasCover ? (coverCheck.value || null) : null;
+
     await adapter.execute(`
       UPDATE users
       SET full_name = COALESCE(?, full_name),
@@ -327,8 +332,8 @@ router.put('/me/profile', requireAuth, async (req: AuthRequest, res: Response) =
           phone = COALESCE(?, phone),
           city = COALESCE(?, city),
           bio = COALESCE(?, bio),
-          avatar_url = COALESCE(?, avatar_url),
-          cover_url = COALESCE(?, cover_url),
+          avatar_url = CASE WHEN ? = 1 THEN ? ELSE avatar_url END,
+          cover_url = CASE WHEN ? = 1 THEN ? ELSE cover_url END,
           interests_json = COALESCE(?, interests_json),
           is_public = COALESCE(?, is_public),
           privacy_settings_json = COALESCE(?, privacy_settings_json),
@@ -343,8 +348,10 @@ router.put('/me/profile', requireAuth, async (req: AuthRequest, res: Response) =
       phone,
       city,
       bio,
-      avatarCheck.value,
-      coverCheck.value,
+      hasAvatar ? 1 : 0,
+      avatarToSave,
+      hasCover ? 1 : 0,
+      coverToSave,
       interestsJson,
       is_public !== undefined ? (is_public ? 1 : 0) : undefined,
       privacyJson,

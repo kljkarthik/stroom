@@ -72,13 +72,6 @@ export const api = {
     return request<{ success: boolean; message: string }>('/auth/logout', { method: 'POST' });
   },
 
-  async resetDemo(status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED') {
-    return request<{ message: string; user: User }>('/auth/reset-demo', {
-      method: 'POST',
-      body: JSON.stringify({ status }),
-    });
-  },
-
   // Onboarding
   async getActiveQuiz() {
     return request<QuizData>('/onboarding/quiz');
@@ -342,6 +335,36 @@ export const api = {
 
   async submitProposal(data: any) {
     return request<{ message: string; proposalId: string }>('/partners/proposals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async submitEventProposal(data: {
+    organizer_name: string;
+    organizer_email: string;
+    organizer_phone: string;
+    organization_name?: string;
+    title: string;
+    category: string;
+    short_description: string;
+    detailed_description: string;
+    format: string;
+    city: string;
+    venue?: string;
+    proposed_date: string;
+    start_time: string;
+    end_time?: string;
+    expected_capacity: number;
+    age_group?: string;
+    cover_image_url?: string;
+    additional_images_json?: string[] | string;
+    estimated_budget?: string;
+    ticketing_details?: string;
+    sponsorship_requirements?: string;
+    additional_notes?: string;
+  }) {
+    return request<{ success: boolean; submissionId: string; message: string }>('/events/submit-proposal', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -877,6 +900,42 @@ export const api = {
 
   async updateAdminRegistration(id: string, data: { checkin_status?: string; seat_tier?: string }) {
     return request<{ success: boolean; registration: any }>(`/admin/registrations/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  },
+
+  async getAdminEventSubmissions(params: {
+    status?: string;
+    city?: string;
+    category?: string;
+    search?: string;
+  } = {}) {
+    const q = new URLSearchParams();
+    if (params.status && params.status !== 'all') q.set('status', params.status);
+    if (params.city && params.city !== 'all') q.set('city', params.city);
+    if (params.category && params.category !== 'all') q.set('category', params.category);
+    if (params.search?.trim()) q.set('search', params.search.trim());
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request<{
+      success: boolean;
+      submissions: any[];
+      metrics: {
+        total: number;
+        pending: number;
+        under_review: number;
+        approved: number;
+        rejected: number;
+      };
+    }>(`/admin/event-submissions${qs}`);
+  },
+
+  async getAdminEventSubmissionDetails(id: string) {
+    return request<{ success: boolean; submission: any }>(`/admin/event-submissions/${id}`);
+  },
+
+  async updateEventSubmissionStatus(id: string, data: { status: string; admin_notes?: string }) {
+    return request<{ success: boolean; message: string; submission: any }>(`/admin/event-submissions/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   },
 
   async getAdminCities() {

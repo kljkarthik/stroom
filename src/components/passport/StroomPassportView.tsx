@@ -23,9 +23,11 @@ import {
   RefreshCw,
   ExternalLink,
   ChevronRight,
+  User as UserIcon,
   Eye,
   Sliders
 } from 'lucide-react';
+import { isUploadedPhoto } from '../../utils/avatarUtils';
 
 interface StroomPassportViewProps {
   onExploreEvents?: () => void;
@@ -144,11 +146,11 @@ export const StroomPassportView: React.FC<StroomPassportViewProps> = ({
             <div className="py-5 flex items-center justify-between gap-4 relative z-10">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl p-1 bg-gradient-to-tr from-stroom-orange to-stroom-gold shrink-0 shadow-brand overflow-hidden">
-                  {card.avatarUrl ? (
+                  {isUploadedPhoto(card.avatarUrl) ? (
                     <img src={card.avatarUrl} alt={card.displayName} className="w-full h-full rounded-xl object-cover" />
                   ) : (
-                    <div className="w-full h-full rounded-xl bg-stroom-charcoal flex items-center justify-center text-white font-black text-2xl">
-                      {card.displayName?.charAt(0) || 'M'}
+                    <div className="w-full h-full rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-400">
+                      <UserIcon className="w-8 h-8" />
                     </div>
                   )}
                 </div>

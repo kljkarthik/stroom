@@ -241,6 +241,11 @@ export const App: React.FC = () => {
           {/* 1. Public Landing / Home */}
           {currentTab === 'landing' && (
             <LandingPage
+              onOpenAuth={(eventId) => {
+                setIntendedTab('event_details');
+                if (eventId) setSelectedEventId(eventId);
+                setShowAuthModal(true);
+              }}
               onGoToAuth={() => {
                 setIntendedTab(null);
                 setShowAuthModal(true);
@@ -272,6 +277,7 @@ export const App: React.FC = () => {
               initialCategory={discoverCategory}
               onSelectEvent={(eventId: string) => navigateToTab('event_details', eventId)}
               onGoToCommunities={() => navigateToTab('communities')}
+              onGoToSubmitEvent={() => navigateToTab('partner_with_us')}
               onOpenAuth={(eventId) => {
                 setIntendedTab('event_details');
                 if (eventId) setSelectedEventId(eventId);
@@ -303,6 +309,7 @@ export const App: React.FC = () => {
                 setShowAuthModal(true);
               }}
               onGoToEvents={() => navigateToTab('discover')}
+              onGoToSubmitEvent={() => navigateToTab('partner_with_us')}
             />
           )}
 

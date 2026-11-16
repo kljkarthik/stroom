@@ -57,7 +57,7 @@ interface PartnerDashboardProps {
 }
 
 export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ onOpenAuth, onBackToPublic }) => {
-  const { user, isAuthenticated, loginAsDemoUser } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [accounts, setAccounts] = useState<PartnerAccount[]>([]);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<PartnerTab>('overview');
@@ -291,12 +291,6 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ onOpenAuth, 
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}
-            <button
-              onClick={() => loginAsDemoUser('partner')}
-              className="px-5 py-3 rounded-xl bg-stroom-black text-white font-bold text-xs hover:bg-stone-800 transition-colors"
-            >
-              Demo Partner Login
-            </button>
           </div>
           {onBackToPublic && (
             <button

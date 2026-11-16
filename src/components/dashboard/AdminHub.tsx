@@ -9,7 +9,8 @@ import { AdminCommunitiesModerationPanel } from '../admin/AdminCommunitiesModera
 import { AdminCheckinPanel } from '../admin/AdminCheckinPanel';
 import { AdminVenuesFinancePanel } from '../admin/AdminVenuesFinancePanel';
 import { AdminAnalyticsSettingsAuditPanel } from '../admin/AdminAnalyticsSettingsAuditPanel';
-import { useAuth, isDemoAuthEnabled } from '../../context/AuthContext';
+import { AdminEventSubmissionsPanel } from '../admin/AdminEventSubmissionsPanel';
+import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import {
   BarChart3,
@@ -36,6 +37,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  Inbox,
 } from 'lucide-react';
 
 interface AdminHubProps {}
@@ -50,6 +52,7 @@ interface NavItemConfig {
 const ADMIN_NAV_ITEMS: NavItemConfig[] = [
   { key: 'overview', label: 'Platform Overview', group: 'Core Operations', icon: BarChart3 },
   { key: 'events', label: 'Events & Cities', group: 'Core Operations', icon: Calendar },
+  { key: 'event_submissions', label: 'Event Submissions', group: 'Core Operations', icon: Inbox },
   { key: 'members', label: 'Members & Roles', group: 'Core Operations', icon: Users },
   { key: 'communities', label: 'Communities', group: 'Core Operations', icon: Compass },
   { key: 'partners', label: 'Partner Management', group: 'Ecosystem & Venue', icon: Building2 },
@@ -65,7 +68,7 @@ const ADMIN_NAV_ITEMS: NavItemConfig[] = [
 ];
 
 export const AdminHub: React.FC<AdminHubProps> = () => {
-  const { user, isAuthenticated, loginAsDemoUser, logout } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const [loadingPerms, setLoadingPerms] = useState(true);
   const [permError, setPermError] = useState<string | null>(null);
@@ -179,28 +182,6 @@ export const AdminHub: React.FC<AdminHubProps> = () => {
               </p>
             )}
           </div>
-
-          {isDemoAuthEnabled && (
-            <div className="pt-2 border-t border-stroom-borderLight space-y-2.5">
-              <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">
-                Quick Demo Staff Access (Development Environment)
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                <button
-                  onClick={() => loginAsDemoUser('admin')}
-                  className="px-4 py-2 rounded-xl bg-stroom-orange text-white font-black text-xs hover:bg-stroom-deep transition-colors"
-                >
-                  Sign in as Demo Admin
-                </button>
-                <button
-                  onClick={() => loginAsDemoUser('checkin')}
-                  className="px-4 py-2 rounded-xl bg-stroom-ivory border border-stroom-borderLight text-stroom-black font-black text-xs hover:border-stroom-orange transition-colors"
-                >
-                  Demo Door Staff
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -239,6 +220,8 @@ export const AdminHub: React.FC<AdminHubProps> = () => {
         );
       case 'events':
         return <AdminEventsCitiesPanel permissions={permissions} />;
+      case 'event_submissions':
+        return <AdminEventSubmissionsPanel permissions={permissions} />;
       case 'members':
         return (
           <AdminMembersRolesPanel

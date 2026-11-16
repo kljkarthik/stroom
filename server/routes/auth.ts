@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { z } from 'zod';
 import { hashPassword, verifyPassword } from '../db/database';
@@ -48,7 +48,7 @@ router.post('/register', authRateLimiter, async (req, res) => {
 
     const id = 'usr_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
     const password_hash = hashPassword(password);
-    const defaultAvatar = avatarCheck.value || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(full_name.trim())}`;
+    const defaultAvatar = avatarCheck.value || undefined;
 
     // Conditional path: Cloudflare D1 Auth Bridge
     if (config.useD1AuthBridge) {
@@ -96,7 +96,7 @@ router.post('/register', authRateLimiter, async (req, res) => {
     await adapter.execute(`
       INSERT INTO users (id, email, password_hash, full_name, avatar_url, role, onboarding_status)
       VALUES (?, ?, ?, ?, ?, 'user', 'NOT_STARTED')
-    `, [id, email.trim().toLowerCase(), password_hash, full_name.trim(), defaultAvatar]);
+    `, [id, email.trim().toLowerCase(), password_hash, full_name.trim(), defaultAvatar || null]);
 
     const user = await adapter.queryOne<User>('SELECT id, email, full_name, avatar_url, role, onboarding_status, created_at, updated_at FROM users WHERE id = ?', [id]);
     if (!user) {
@@ -227,26 +227,9 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
   });
 });
 
-// Utility endpoint to reset demo user state for testing (disabled in production)
-router.post('/reset-demo', requireAuth, async (req: AuthRequest, res: Response) => {
-  if (config.isProduction) {
-    return res.status(403).json({ error: 'Demo reset endpoint is disabled in production.' });
-  }
-  const userId = req.user!.id;
-  const { status = 'NOT_STARTED' } = req.body;
-  const adapter = getDatabaseAdapter();
-
-  await adapter.transaction(async (tx) => {
-    // Delete any active sessions and preferences if resetting to NOT_STARTED
-    if (status === 'NOT_STARTED') {
-      await tx.execute('DELETE FROM quiz_sessions WHERE user_id = ?', [userId]);
-      await tx.execute('DELETE FROM user_preferences WHERE user_id = ?', [userId]);
-    }
-    await tx.execute("UPDATE users SET onboarding_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [status, userId]);
-  });
-
-  const updatedUser = await adapter.queryOne<User>('SELECT id, email, full_name, avatar_url, role, onboarding_status, created_at, updated_at FROM users WHERE id = ?', [userId]);
-  return res.json({ message: 'User status reset', user: updatedUser });
+// Decommissioned demo reset endpoint (returns 404)
+router.all('/reset-demo', (_req: Request, res: Response) => {
+  return res.status(404).json({ error: 'Endpoint decommissioned.' });
 });
 
 export default router;

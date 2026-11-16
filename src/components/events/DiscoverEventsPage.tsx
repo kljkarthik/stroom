@@ -25,7 +25,8 @@ import {
   ChevronRight,
   CheckCircle2,
   Flame,
-  AlertCircle
+  AlertCircle,
+  Plus
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -35,6 +36,7 @@ interface DiscoverEventsPageProps {
   initialCity?: string;
   onSelectEvent: (eventId: string) => void;
   onGoToCommunities?: () => void;
+  onGoToSubmitEvent?: () => void;
   onOpenAuth?: (eventId?: string) => void;
 }
 
@@ -69,6 +71,7 @@ export const DiscoverEventsPage: React.FC<DiscoverEventsPageProps> = ({
   onSelectEvent,
   onGoToCommunities,
   onOpenAuth,
+  onGoToSubmitEvent,
 }) => {
   const { isAuthenticated } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
@@ -371,17 +374,30 @@ export const DiscoverEventsPage: React.FC<DiscoverEventsPageProps> = ({
             <div className="w-16 h-16 rounded-3xl bg-stroom-cream flex items-center justify-center text-stroom-orange mx-auto mb-4">
               <Compass className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-black text-stroom-black uppercase">No experiences found</h3>
+            <h3 className="text-lg font-black text-stroom-black uppercase">No experiences available right now</h3>
             <p className="mt-2 text-xs text-stroom-charcoal/80 font-medium">
-              We couldn't find any events matching your selected search or filters. Try picking another city or resetting the filters.
+              We are actively curating authentic real-world experiences. Submit your event proposal or explore upcoming community circles.
             </p>
-            <button
-              onClick={handleResetFilters}
-              className="mt-5 px-5 py-2.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand hover:brightness-105 transition-all inline-flex items-center gap-2"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Reset All Filters</span>
-            </button>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-5 py-2.5 rounded-xl border border-stroom-borderLight bg-white text-stroom-black text-xs font-black hover:bg-stone-50 transition-all inline-flex items-center gap-2"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-stroom-orange" />
+                <span>Explore Again</span>
+              </button>
+              {onGoToSubmitEvent && (
+                <button
+                  type="button"
+                  onClick={onGoToSubmitEvent}
+                  className="px-5 py-2.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand hover:brightness-105 transition-all inline-flex items-center gap-2"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Submit an Event</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -534,6 +550,7 @@ export const DiscoverEventsPage: React.FC<DiscoverEventsPageProps> = ({
           setIsModalOpen(false);
           setSelectedEventForModal(null);
         }}
+        onOpenAuth={onOpenAuth}
         onRegistrationSuccess={() => {
           fetchEvents();
         }}

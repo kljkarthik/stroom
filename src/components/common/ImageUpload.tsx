@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X, RefreshCw, AlertCircle, Loader2, Image as ImageIcon, Link as LinkIcon } from 'lucide-react';
 import { api } from '../../services/api';
 
@@ -30,23 +30,35 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   label,
   helperText,
   aspectRatio = 'auto',
-  maxSizeMB = 10,
+  maxSizeMB = 5,
   disabled = false,
   className = '',
-  allowManualUrl = true,
+  allowManualUrl = false,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [showManualInput, setShowManualInput] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  useEffect(() => {
+    setImgError(false);
+  }, [value]);
+
   const aspectClass = {
-    square: 'aspect-square max-w-[200px]',
-    video: 'aspect-video max-w-full',
+    square: 'aspect-square w-full',
+    video: 'aspect-video w-full',
     banner: 'h-36 sm:h-44 w-full',
     auto: 'min-h-[140px] max-h-[260px] w-full',
+  }[aspectRatio];
+
+  const containerWidthClass = {
+    square: 'max-w-[260px] w-full',
+    video: 'w-full',
+    banner: 'w-full',
+    auto: 'w-full',
   }[aspectRatio];
 
   const validateFile = (file: File): string | null => {
@@ -185,7 +197,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
             fileInputRef.current.click();
           }
         }}
-        className={`relative overflow-hidden rounded-xl border-2 transition-all cursor-pointer ${
+        className={`relative overflow-hidden rounded-xl border-2 transition-all cursor-pointer ${containerWidthClass} ${
           isDragging
             ? 'border-amber-500 bg-amber-500/10 scale-[1.01]'
             : 'border-white/10 hover:border-amber-500/50 bg-stone-950/60'
@@ -203,16 +215,21 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
         {value ? (
           /* Preview Mode */
           <div className={`relative w-full ${aspectClass} overflow-hidden group bg-stone-900 flex items-center justify-center`}>
-            <img
-              src={value}
-              alt="Uploaded Preview"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                // If invalid or broken URL
-                (e.target as HTMLImageElement).src =
-                  'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=400&q=80';
-              }}
-            />
+            {imgError ? (
+              <div className="flex flex-col items-center justify-center p-6 text-stone-500">
+                <ImageIcon className="w-10 h-10 mb-2 opacity-40" />
+                <span className="text-xs">Image unavailable</span>
+              </div>
+            ) : (
+              <img
+                src={value}
+                alt="Uploaded Preview"
+                className="w-full h-full object-cover object-center block"
+                onError={() => {
+                  setImgError(true);
+                }}
+              />
+            )}
 
             {/* Hover Actions Overlay */}
             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
@@ -223,7 +240,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                   fileInputRef.current?.click();
                 }}
                 disabled={uploading}
-                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs rounded-lg shadow-lg flex items-center gap-1.5 transition-all"
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs rounded-lg shadow-lg flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Replace
@@ -232,7 +249,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
                 type="button"
                 onClick={handleRemove}
                 disabled={uploading}
-                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-lg shadow-lg flex items-center gap-1.5 transition-all"
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-lg shadow-lg flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
                 Remove

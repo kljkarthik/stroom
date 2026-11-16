@@ -20,6 +20,7 @@ import {
   Award,
   Sliders
 } from 'lucide-react';
+import { isUploadedPhoto } from '../../utils/avatarUtils';
 
 export type ActiveTab =
   | 'landing'
@@ -155,15 +156,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center gap-2 p-1.5 pr-3 rounded-2xl border text-xs font-extrabold transition-colors bg-white border-stroom-borderLight text-stroom-black hover:border-stroom-orange"
               >
-                {user?.avatar_url ? (
+                {isUploadedPhoto(user?.avatar_url) ? (
                   <img
-                    src={user.avatar_url}
-                    alt={user.full_name || 'Member'}
-                    className="w-7 h-7 rounded-xl object-cover border border-stroom-orange/30"
+                    src={user!.avatar_url!}
+                    alt={user?.full_name || 'Member'}
+                    className="w-7 h-7 rounded-full object-cover border border-stroom-orange/30"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-xl bg-stroom-orange text-white flex items-center justify-center font-bold text-xs">
-                    {user?.full_name?.charAt(0) || 'U'}
+                  <div className="w-7 h-7 rounded-full bg-stone-900 text-stone-300 flex items-center justify-center font-bold text-xs">
+                    <UserIcon className="w-3.5 h-3.5" />
                   </div>
                 )}
                 <span className="hidden sm:inline max-w-[100px] truncate">
@@ -175,15 +176,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               {dropdownOpen && (
                 <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white border border-stroom-borderLight shadow-2xl p-2 z-50 text-stroom-black animate-fade-in">
                   <div className="p-2 border-b border-stroom-cream mb-1 flex items-center gap-2.5">
-                    {user?.avatar_url ? (
+                    {isUploadedPhoto(user?.avatar_url) ? (
                       <img
-                        src={user.avatar_url}
-                        alt={user.full_name || 'Member'}
-                        className="w-9 h-9 rounded-xl object-cover border border-stroom-orange/40 shrink-0"
+                        src={user!.avatar_url!}
+                        alt={user?.full_name || 'Member'}
+                        className="w-9 h-9 rounded-full object-cover border border-stroom-orange/40 shrink-0"
                       />
                     ) : (
-                      <div className="w-9 h-9 rounded-xl bg-stroom-orange text-white flex items-center justify-center font-bold text-sm shrink-0">
-                        {user?.full_name?.charAt(0) || 'U'}
+                      <div className="w-9 h-9 rounded-full bg-stone-900 text-stone-300 flex items-center justify-center shrink-0">
+                        <UserIcon className="w-4 h-4" />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
