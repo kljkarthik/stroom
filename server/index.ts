@@ -47,6 +47,50 @@ app.use(express.json({ limit: '2mb' }));
 // Initialize SQLite database and seed initial data (SQLite driver only)
 if (getActiveDriver() === 'sqlite') {
   initDatabase();
+} else {
+  // Ensure critical tables exist on PostgreSQL deployments
+  (async () => {
+    try {
+      const adapter = getDatabaseAdapter();
+      await adapter.execute(`
+        CREATE TABLE IF NOT EXISTS event_submissions (
+          id TEXT PRIMARY KEY,
+          user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+          organizer_name TEXT NOT NULL,
+          organizer_email TEXT NOT NULL,
+          organizer_phone TEXT NOT NULL,
+          organization_name TEXT,
+          title TEXT NOT NULL,
+          category TEXT NOT NULL,
+          short_description TEXT NOT NULL,
+          detailed_description TEXT NOT NULL,
+          format TEXT NOT NULL DEFAULT 'Physical',
+          city TEXT NOT NULL,
+          venue TEXT,
+          proposed_date TEXT NOT NULL,
+          start_time TEXT NOT NULL,
+          end_time TEXT,
+          expected_capacity INTEGER NOT NULL,
+          age_group TEXT,
+          cover_image_url TEXT,
+          additional_images_json TEXT,
+          estimated_budget TEXT,
+          ticketing_details TEXT,
+          sponsorship_requirements TEXT,
+          additional_notes TEXT,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          admin_notes TEXT,
+          reviewed_by TEXT,
+          reviewed_at TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('[DB] PostgreSQL schema verified successfully');
+    } catch (err: any) {
+      console.warn('[DB] PostgreSQL schema check warning:', err?.message || err);
+    }
+  })();
 }
 
 // Health Check (verifies live database connectivity & operational status)

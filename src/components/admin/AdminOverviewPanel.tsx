@@ -89,7 +89,7 @@ export const AdminOverviewPanel: React.FC<AdminOverviewPanelProps> = ({
         <div>
           <h2 className="text-xl font-black text-stroom-black font-display">Platform Operations Overview</h2>
           <p className="text-xs text-stroom-charcoal/70">
-            Live SQLite metrics across members, events, communities, partners, and check-ins. Active members: {m.activePeriodLabel}.
+            Live platform metrics across members, events, communities, partners, and check-ins. Active members: {m.activePeriodLabel}.
           </p>
         </div>
         <button

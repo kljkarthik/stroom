@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { StroomLogo } from '../common/StroomLogo';
+import { EmptyState } from '../common/EmptyState';
 import {
   Shield,
   Award,
@@ -309,27 +310,13 @@ export const StroomPassportView: React.FC<StroomPassportViewProps> = ({
         {activeTab === 'stamps' && (
           <div>
             {stamps.length === 0 ? (
-              <div className="p-10 sm:p-14 rounded-3xl bg-white border border-stroom-borderLight text-center space-y-4 max-w-xl mx-auto shadow-sm">
-                <div className="w-16 h-16 rounded-2xl bg-stroom-cream border border-stroom-orange/30 text-stroom-deep flex items-center justify-center mx-auto">
-                  <Award className="w-8 h-8" />
-                </div>
-                <div>
-                  <h4 className="text-base font-black text-stroom-black font-display">
-                    Your Passport is Ready For Its First Stamp!
-                  </h4>
-                  <p className="text-xs text-stroom-charcoal/80 max-w-sm mx-auto mt-1 leading-relaxed">
-                    Whenever you attend a STROOM meetup, sports blitz, or community gathering and check in at the door, an authentic digital stamp will appear here permanently.
-                  </p>
-                </div>
-                {onExploreEvents && (
-                  <button
-                    onClick={onExploreEvents}
-                    className="px-5 py-2.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand hover:brightness-105"
-                  >
-                    Browse Upcoming Events
-                  </button>
-                )}
-              </div>
+              <EmptyState
+                icon={Award}
+                title="Your Passport is Ready For Its First Stamp!"
+                description="Whenever you attend a STROOM meetup, sports blitz, or community gathering and check in at the door, an authentic digital stamp will appear here permanently."
+                actionText={onExploreEvents ? "Browse Upcoming Events" : undefined}
+                onAction={onExploreEvents}
+              />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {stamps.map((stamp: any) => (

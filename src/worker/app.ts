@@ -26,6 +26,8 @@ export function createApp(): Hono<{ Bindings: Env }> {
           'http://127.0.0.1:5173',
           'https://stroom.in',
           'https://www.stroom.in',
+          'https://strangersroom.in',
+          'https://www.strangersroom.in',
           'https://stroom.pages.dev',
         ];
         return allowed.includes(origin) ? origin : null;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Community, Event } from '../../types';
+import { EmptyState } from '../common/EmptyState';
 import { useAuth } from '../../context/AuthContext';
 import {
   ArrowLeft,
@@ -255,13 +256,12 @@ export const CommunityDetailsPage: React.FC<CommunityDetailsPageProps> = ({
               </div>
 
               {upcomingEvents.length === 0 ? (
-                <div className="p-8 text-center bg-stroom-ivory/60 rounded-2xl border border-dashed border-stroom-borderLight">
-                  <Calendar className="w-8 h-8 text-stone-400 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-stroom-charcoal">No upcoming meetups currently listed.</p>
-                  <p className="text-[11px] text-stone-500 mt-1">
-                    Regular sessions follow: <strong>{community.meeting_schedule}</strong>. Check back soon for the next booking drop!
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Calendar}
+                  title="No Upcoming Meetups Currently Scheduled"
+                  description={`Regular sessions follow: ${community.meeting_schedule || 'weekly weekend schedule'}. Check back soon for the next booking drop!`}
+                  className="my-4"
+                />
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {upcomingEvents.map((ev) => (

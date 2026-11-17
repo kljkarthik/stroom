@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StroomLogo } from '../common/StroomLogo';
+import { EmptyState } from '../common/EmptyState';
 import { RegistrationModal, EventDetails } from '../modals/RegistrationModal';
 import { PartnerProposalModal } from '../modals/PartnerProposalModal';
 import { HostEventModal } from '../modals/HostEventModal';
@@ -631,31 +632,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               })}
             </div>
           ) : (
-            <div className="py-16 text-center bg-white rounded-3xl border border-stroom-borderLight p-8 max-w-lg mx-auto">
-              <Compass className="w-10 h-10 text-stroom-orange/60 mx-auto mb-3" />
-              <h3 className="text-base font-black text-stroom-black">New Experiences Coming Soon</h3>
-              <p className="text-xs text-stroom-charcoal/70 mt-1 max-w-sm mx-auto">
-                We are curating upcoming weekend sessions. Be among the first to propose an experience or host in your city.
-              </p>
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedCityId('all')}
-                  className="px-4 py-2 rounded-xl border border-stroom-borderLight bg-white text-stroom-black text-xs font-black hover:bg-stone-50 transition-all"
-                >
-                  Browse All Open Cities
-                </button>
-                {onGoToPartnerWithUs && (
-                  <button
-                    type="button"
-                    onClick={onGoToPartnerWithUs}
-                    className="px-4 py-2 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand hover:brightness-105 transition-all"
-                  >
-                    Submit an Event
-                  </button>
-                )}
-              </div>
-            </div>
+            <EmptyState
+              icon={Compass}
+              title="New Experiences Coming Soon"
+              description="We are curating upcoming weekend sessions. Be among the first to propose an experience or host in your city."
+              secondaryActionText="Browse All Open Cities"
+              onSecondaryAction={() => setSelectedCityId('all')}
+              actionText={onGoToPartnerWithUs ? "Submit an Event" : undefined}
+              onAction={onGoToPartnerWithUs}
+            />
           )}
 
           {/* 10 Category Quick Pills */}

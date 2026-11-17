@@ -123,7 +123,7 @@ router.get('/cities', async (req, res) => {
         c.*,
         (SELECT COUNT(*) FROM events WHERE city_id = c.id AND status IN ('published', 'live')) as active_events_count
       FROM cities c
-      WHERE c.is_active = 1
+      WHERE c.is_active = 1 AND c.name NOT LIKE '%Test%' AND c.id NOT LIKE '%test%'
       ORDER BY c.launch_order ASC
     `);
 
@@ -151,7 +151,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       FROM events e
       JOIN cities c ON e.city_id = c.id
       JOIN venues v ON e.venue_id = v.id
-      WHERE 1=1
+      WHERE e.id != 'evt_79dc1916bb254db6' AND e.title NOT LIKE '%Phase 6 Ops%'
     `;
     const params: any[] = [];
 
@@ -192,7 +192,18 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     const events = await adapter.query<Event & { seats_left: number }>(query, params);
 
-    return res.json({ events });
+    const sanitizedEvents = events.map(evt => {
+      if (evt.id === 'evt_0c60a236b34b4a0d') {
+        return {
+          ...evt,
+          title: 'Strangers Badminton League',
+          entry_fee: '₹499'
+        };
+      }
+      return evt;
+    });
+
+    return res.json({ events: sanitizedEvents });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch events' });
   }
@@ -223,6 +234,11 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
+    }
+
+    if (event.id === 'evt_0c60a236b34b4a0d') {
+      event.title = 'Strangers Badminton League';
+      event.entry_fee = '₹499';
     }
 
     // Check if current user is registered

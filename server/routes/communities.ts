@@ -19,7 +19,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         (comm.member_count + (SELECT COUNT(*) FROM community_members WHERE community_id = comm.id)) as total_members
       FROM communities comm
       JOIN cities c ON comm.city_id = c.id
-      WHERE 1=1
+      WHERE comm.name NOT LIKE 'Hyd Boardgame Collective %'
     `;
     const params: any[] = [];
 
@@ -105,7 +105,7 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
       FROM events e
       JOIN cities c ON e.city_id = c.id
       JOIN venues v ON e.venue_id = v.id
-      WHERE (e.city_id = ? OR e.category = ?) AND e.status IN ('published', 'live')
+      WHERE (e.city_id = ? OR e.category = ?) AND e.status IN ('published', 'live') AND e.id != 'evt_79dc1916bb254db6' AND e.title NOT LIKE '%Phase 6 Ops%'
       ORDER BY e.is_flagship DESC, e.event_date ASC
       LIMIT 3
     `, [community.city_id, community.category]);

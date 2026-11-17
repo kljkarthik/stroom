@@ -5,6 +5,7 @@ import { StroomLogo } from '../common/StroomLogo';
 import { StroomPassportView } from '../passport/StroomPassportView';
 import { ProfileStudioView } from '../profile/ProfileStudioView';
 import { PublicProfileModal } from '../profile/PublicProfileModal';
+import { EmptyState } from '../common/EmptyState';
 import {
   Ticket,
   Trophy,
@@ -373,23 +374,13 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="p-8 rounded-3xl bg-white border border-stroom-borderLight text-center space-y-3">
-                <Ticket className="w-10 h-10 text-stone-300 mx-auto" />
-                <h4 className="text-base font-black text-stroom-black font-display">
-                  No Upcoming Registrations
-                </h4>
-                <p className="text-xs text-stroom-charcoal/80 max-w-sm mx-auto">
-                  You don't have an active event ticket right now. Explore our city calendar for sports blitzes, social mixers, and coffee meetups.
-                </p>
-                {onExploreEvents && (
-                  <button
-                    onClick={onExploreEvents}
-                    className="px-5 py-2.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand hover:brightness-105"
-                  >
-                    Explore Experiences
-                  </button>
-                )}
-              </div>
+              <EmptyState
+                icon={Ticket}
+                title="No Upcoming Registrations"
+                description="You don't have an active event ticket right now. Explore our city calendar for sports blitzes, social mixers, and coffee meetups."
+                actionText={onExploreEvents ? "Explore Experiences" : undefined}
+                onAction={onExploreEvents}
+              />
             )}
 
             {/* 2-Column: Quick Passport Stamps Glance & Recent Activity Feed */}
@@ -537,23 +528,13 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
             {eventsSubTab === 'upcoming' && (
               <div>
                 {upcomingEvents.length === 0 ? (
-                  <div className="p-12 rounded-3xl bg-white border border-stroom-borderLight text-center space-y-3">
-                    <Ticket className="w-12 h-12 text-stone-300 mx-auto" />
-                    <h4 className="text-base font-black text-stroom-black font-display">
-                      No Upcoming Events
-                    </h4>
-                    <p className="text-xs text-stroom-charcoal/80 max-w-sm mx-auto">
-                      You are not registered for any upcoming events. Explore curated experiences or coffee meetups in your city.
-                    </p>
-                    {onExploreEvents && (
-                      <button
-                        onClick={onExploreEvents}
-                        className="px-5 py-2.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand"
-                      >
-                        Browse Calendar
-                      </button>
-                    )}
-                  </div>
+                  <EmptyState
+                    icon={Ticket}
+                    title="No Upcoming Events"
+                    description="You are not registered for any upcoming events. Explore curated experiences or coffee meetups in your city."
+                    actionText={onExploreEvents ? "Browse Calendar" : undefined}
+                    onAction={onExploreEvents}
+                  />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {upcomingEvents.map((ev) => (
@@ -740,23 +721,13 @@ export const ParticipantDashboard: React.FC<ParticipantDashboardProps> = ({
             </div>
 
             {joinedCommunities.length === 0 ? (
-              <div className="p-12 rounded-3xl bg-white border border-stroom-borderLight text-center space-y-3">
-                <Users className="w-12 h-12 text-stone-300 mx-auto" />
-                <h4 className="text-base font-black text-stroom-black font-display">
-                  You Haven't Joined Any Communities Yet
-                </h4>
-                <p className="text-xs text-stroom-charcoal/80 max-w-sm mx-auto">
-                  STROOM communities are where people with shared interests coordinate meetups, share stories, and organize weekend gatherings.
-                </p>
-                {onGoToCommunities && (
-                  <button
-                    onClick={onGoToCommunities}
-                    className="px-5 py-2.5 rounded-xl bg-stroom-orange text-white text-xs font-black shadow-brand"
-                  >
-                    Browse Local Communities
-                  </button>
-                )}
-              </div>
+              <EmptyState
+                icon={Users}
+                title="You Haven't Joined Any Communities Yet"
+                description="STROOM communities are where people with shared interests coordinate meetups, share stories, and organize weekend gatherings."
+                actionText={onGoToCommunities ? "Browse Local Communities" : undefined}
+                onAction={onGoToCommunities}
+              />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {joinedCommunities.map((comm) => (
