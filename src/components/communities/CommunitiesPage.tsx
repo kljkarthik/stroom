@@ -297,6 +297,9 @@ export const CommunitiesPage: React.FC<CommunitiesPageProps> = ({
                   <img
                     src={comm.image_url}
                     alt={comm.name}
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&auto=format&fit=crop&q=80';
+                    }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />

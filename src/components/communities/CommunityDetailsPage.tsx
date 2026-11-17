@@ -183,6 +183,9 @@ export const CommunityDetailsPage: React.FC<CommunityDetailsPageProps> = ({
           <img
             src={community.image_url}
             alt={community.name}
+            onError={(e) => {
+              e.currentTarget.src = 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&auto=format&fit=crop&q=80';
+            }}
             className="w-full h-full object-cover opacity-60"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-stroom-black via-stroom-black/40 to-transparent" />

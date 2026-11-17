@@ -147,11 +147,32 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         v.name as venue_name,
         v.area as venue_area,
         v.address as venue_address,
-        (e.seats_total - e.seats_booked) as seats_left
+        (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status != 'cancelled') as seats_booked,
+        (e.seats_total - (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status != 'cancelled')) as seats_left
       FROM events e
       JOIN cities c ON e.city_id = c.id
       JOIN venues v ON e.venue_id = v.id
-      WHERE e.id != 'evt_79dc1916bb254db6' AND e.title NOT LIKE '%Phase 6 Ops%'
+      WHERE e.id NOT IN (
+        'evt_0c60a236b34b4a0d',
+        'evt_79dc1916bb254db6',
+        'evt_6c9c72169c6540',
+        'evt_pune_draft_02',
+        'evt_pune_cafe_04',
+        'evt_mum_acoustic_08',
+        'evt_hyd_sports_03',
+        'evt_pune_trek_06',
+        'evt_blr_futsal_07',
+        'evt_hyd_cinema_05',
+        'evt_hyd_founders_09',
+        'evt_b19f40e669fa49',
+        'evt_hyd_auction_01',
+        'evt_hyd_past_10'
+      )
+      AND e.title NOT LIKE '%Phase 6 Ops%'
+      AND e.title NOT LIKE '%Safe Event%'
+      AND e.description NOT LIKE '%E2E%'
+      AND e.title != 'hello'
+      AND e.description != 'hello'
     `;
     const params: any[] = [];
 
@@ -192,18 +213,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
 
     const events = await adapter.query<Event & { seats_left: number }>(query, params);
 
-    const sanitizedEvents = events.map(evt => {
-      if (evt.id === 'evt_0c60a236b34b4a0d') {
-        return {
-          ...evt,
-          title: 'Strangers Badminton League',
-          entry_fee: '₹499'
-        };
-      }
-      return evt;
-    });
-
-    return res.json({ events: sanitizedEvents });
+    return res.json({ events });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch events' });
   }
@@ -215,6 +225,26 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
     const adapter = getDatabaseAdapter();
     const { id } = req.params;
 
+    const excludedIds = [
+      'evt_0c60a236b34b4a0d',
+      'evt_79dc1916bb254db6',
+      'evt_6c9c72169c6540',
+      'evt_pune_draft_02',
+      'evt_pune_cafe_04',
+      'evt_mum_acoustic_08',
+      'evt_hyd_sports_03',
+      'evt_pune_trek_06',
+      'evt_blr_futsal_07',
+      'evt_hyd_cinema_05',
+      'evt_hyd_founders_09',
+      'evt_b19f40e669fa49',
+      'evt_hyd_auction_01',
+      'evt_hyd_past_10'
+    ];
+    if (excludedIds.includes(id)) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
     const event = await adapter.queryOne<Event & { seats_left: number }>(`
       SELECT
         e.*,
@@ -225,20 +255,16 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
         v.address as venue_address,
         v.capacity as venue_capacity,
         v.partnership_tier as venue_tier,
-        (e.seats_total - e.seats_booked) as seats_left
+        (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status != 'cancelled') as seats_booked,
+        (e.seats_total - (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status != 'cancelled')) as seats_left
       FROM events e
       JOIN cities c ON e.city_id = c.id
       JOIN venues v ON e.venue_id = v.id
       WHERE e.id = ?
     `, [id]);
 
-    if (!event) {
+    if (!event || event.description?.toLowerCase().includes('e2e') || event.title?.includes('Phase 6 Ops')) {
       return res.status(404).json({ error: 'Event not found' });
-    }
-
-    if (event.id === 'evt_0c60a236b34b4a0d') {
-      event.title = 'Strangers Badminton League';
-      event.entry_fee = '₹499';
     }
 
     // Check if current user is registered

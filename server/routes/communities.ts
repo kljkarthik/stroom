@@ -16,7 +16,7 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
         comm.*,
         c.name as city_name,
         c.state as state_name,
-        (comm.member_count + (SELECT COUNT(*) FROM community_members WHERE community_id = comm.id)) as total_members
+        (SELECT COUNT(*) FROM community_members WHERE community_id = comm.id) as total_members
       FROM communities comm
       JOIN cities c ON comm.city_id = c.id
       WHERE comm.name NOT LIKE 'Hyd Boardgame Collective %'
@@ -51,11 +51,19 @@ router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
       userJoinedCommIds = new Set(memberships.map(m => m.community_id));
     }
 
-    const communities = rawCommunities.map(c => ({
-      ...c,
-      member_count: Number(c.total_members) || 0,
-      is_member: userJoinedCommIds.has(c.id),
-    }));
+    const communities = rawCommunities.map(c => {
+      let imageUrl = c.image_url;
+      // Fix broken Unsplash image for Bangalore turf futsal
+      if (c.id === 'comm_blr_sports' || imageUrl?.includes('photo-1529900245534-47fbf82a472c')) {
+        imageUrl = 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&auto=format&fit=crop&q=80';
+      }
+      return {
+        ...c,
+        image_url: imageUrl,
+        member_count: Number(c.total_members) || 0,
+        is_member: userJoinedCommIds.has(c.id),
+      };
+    });
 
     return res.json({ communities });
   } catch (err: any) {
@@ -75,7 +83,7 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
         comm.*,
         c.name as city_name,
         c.state as state_name,
-        (comm.member_count + (SELECT COUNT(*) FROM community_members WHERE community_id = comm.id)) as total_members
+        (SELECT COUNT(*) FROM community_members WHERE community_id = comm.id) as total_members
       FROM communities comm
       JOIN cities c ON comm.city_id = c.id
       WHERE comm.id = ? OR comm.slug = ?
@@ -87,6 +95,11 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Community not found' });
     }
 
+    // Fix broken Unsplash image
+    if (community.id === 'comm_blr_sports' || community.image_url?.includes('photo-1529900245534-47fbf82a472c')) {
+      community.image_url = 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&auto=format&fit=crop&q=80';
+    }
+
     // Check if current user is member
     let isMember = false;
     if (req.user) {
@@ -94,18 +107,39 @@ router.get('/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
       isMember = !!mem;
     }
 
-    // Fetch upcoming events related to this community's city or category
+    // Fetch upcoming events related to this community's city or category (excluding test and seeded demo events)
     const upcomingEvents = await adapter.query(`
       SELECT
         e.*,
         c.name as city_name,
         v.name as venue_name,
         v.area as venue_area,
-        (e.seats_total - e.seats_booked) as seats_left
+        (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status != 'cancelled') as seats_booked,
+        (e.seats_total - (SELECT COUNT(*) FROM event_registrations WHERE event_id = e.id AND checkin_status != 'cancelled')) as seats_left
       FROM events e
       JOIN cities c ON e.city_id = c.id
       JOIN venues v ON e.venue_id = v.id
-      WHERE (e.city_id = ? OR e.category = ?) AND e.status IN ('published', 'live') AND e.id != 'evt_79dc1916bb254db6' AND e.title NOT LIKE '%Phase 6 Ops%'
+      WHERE (e.city_id = ? OR e.category = ?)
+        AND e.status IN ('published', 'live')
+        AND e.id NOT IN (
+          'evt_0c60a236b34b4a0d',
+          'evt_79dc1916bb254db6',
+          'evt_6c9c72169c6540',
+          'evt_pune_draft_02',
+          'evt_pune_cafe_04',
+          'evt_mum_acoustic_08',
+          'evt_hyd_sports_03',
+          'evt_pune_trek_06',
+          'evt_blr_futsal_07',
+          'evt_hyd_cinema_05',
+          'evt_hyd_founders_09',
+          'evt_b19f40e669fa49',
+          'evt_hyd_auction_01',
+          'evt_hyd_past_10'
+        )
+        AND e.title NOT LIKE '%Phase 6 Ops%'
+        AND e.title NOT LIKE '%Safe Event%'
+        AND e.description NOT LIKE '%E2E%'
       ORDER BY e.is_flagship DESC, e.event_date ASC
       LIMIT 3
     `, [community.city_id, community.category]);
